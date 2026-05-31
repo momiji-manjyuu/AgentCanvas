@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer } from "electron";
 const api = {
   openWorkspace: () => ipcRenderer.invoke("workspace:open-dialog"),
   openWorkspacePath: (workspacePath: string) => ipcRenderer.invoke("workspace:open-path", workspacePath),
+  getRecentWorkspaces: () => ipcRenderer.invoke("workspace:recent"),
   createEmptyWorkspace: () => ipcRenderer.invoke("workspace:create-empty"),
   createSampleWorkspace: () => ipcRenderer.invoke("workspace:create-sample"),
   loadDiagram: (diagramId: string) => ipcRenderer.invoke("diagram:load", diagramId),

@@ -1,6 +1,6 @@
 import { MessageSquarePlus, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
-import type { DiagramEdgeArrow } from "@agent-canvas/core";
+import type { CodeRef, DiagramEdgeArrow } from "@agent-canvas/core";
 import { edgeArrows, edgeTypes, nodeTypes, useWorkspaceStore } from "../state/workspace-store";
 
 export function Inspector() {
@@ -17,6 +17,7 @@ export function Inspector() {
   const resolveComment = useWorkspaceStore((state) => state.resolveComment);
   const [refPath, setRefPath] = useState("");
   const [refSymbol, setRefSymbol] = useState("");
+  const [codeRefError, setCodeRefError] = useState<string | null>(null);
   const [quickText, setQuickText] = useState("");
 
   if (!document) {
@@ -94,31 +95,60 @@ export function Inspector() {
             <button
               title="Add code reference"
               onClick={() => {
-                if (!refPath.trim()) {
+                const nextPath = refPath.trim();
+                if (!nextPath) {
+                  return;
+                }
+                if (isUnsafeCodeRefPath(nextPath)) {
+                  setCodeRefError("Code references must stay inside the workspace");
                   return;
                 }
                 updateNode(selectedNode.id, {
                   codeRefs: [
                     ...selectedNode.codeRefs,
                     {
-                      path: refPath.trim(),
+                      path: nextPath,
                       ...(refSymbol.trim() ? { symbol: refSymbol.trim() } : {}),
                     },
                   ],
                 });
                 setRefPath("");
                 setRefSymbol("");
+                setCodeRefError(null);
               }}
               type="button"
             >
               <Plus size={15} />
             </button>
           </div>
-          {selectedNode.codeRefs.map((ref) => (
-            <code className="list-code" key={`${ref.path}:${ref.symbol ?? ""}`}>
-              {ref.path}
-              {ref.symbol ? `#${ref.symbol}` : ""}
-            </code>
+          {codeRefError ? <p className="field-error">{codeRefError}</p> : null}
+          {selectedNode.codeRefs.map((ref, index) => (
+            <div className="code-ref-row" key={`${ref.path}:${index}`}>
+              <code className="list-code">{ref.path}</code>
+              <input
+                value={ref.symbol ?? ""}
+                onChange={(event) => {
+                  const symbol = event.target.value.trim();
+                  updateNode(selectedNode.id, {
+                    codeRefs: selectedNode.codeRefs.map((item, itemIndex) =>
+                      itemIndex === index ? withOptionalSymbol(item, symbol) : item,
+                    ),
+                  });
+                }}
+                placeholder="symbol"
+              />
+              <button
+                title="Remove code reference"
+                onClick={() =>
+                  updateNode(selectedNode.id, {
+                    codeRefs: selectedNode.codeRefs.filter((_, itemIndex) => itemIndex !== index),
+                  })
+                }
+                type="button"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
           ))}
         </div>
       ) : null}
@@ -243,4 +273,24 @@ export function Inspector() {
       ) : null}
     </section>
   );
+}
+
+function isUnsafeCodeRefPath(value: string): boolean {
+  return (
+    value.startsWith("/") ||
+    /^[A-Za-z]:[\\/]/.test(value) ||
+    value === ".." ||
+    value.startsWith("../") ||
+    value.startsWith("..\\") ||
+    value.includes("/../") ||
+    value.includes("\\..\\")
+  );
+}
+
+function withOptionalSymbol(value: CodeRef, symbol: string): CodeRef {
+  if (symbol) {
+    return { ...value, symbol };
+  }
+  const { symbol: _symbol, ...rest } = value;
+  return rest;
 }

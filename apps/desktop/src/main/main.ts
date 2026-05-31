@@ -22,8 +22,16 @@ async function createWindow(): Promise<void> {
   });
 
   window.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url);
+    if (isAllowedExternalUrl(url)) {
+      void shell.openExternal(url);
+    }
     return { action: "deny" };
+  });
+
+  window.webContents.on("will-navigate", (event, url) => {
+    if (!isAllowedAppNavigation(url)) {
+      event.preventDefault();
+    }
   });
 
   if (isDev && process.env.VITE_DEV_SERVER_URL) {
@@ -49,3 +57,23 @@ app.on("window-all-closed", () => {
     app.quit();
   }
 });
+
+function isAllowedExternalUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" || parsed.protocol === "http:" || parsed.protocol === "mailto:";
+  } catch {
+    return false;
+  }
+}
+
+function isAllowedAppNavigation(url: string): boolean {
+  if (isDev && process.env.VITE_DEV_SERVER_URL) {
+    return url.startsWith(process.env.VITE_DEV_SERVER_URL);
+  }
+  try {
+    return new URL(url).protocol === "file:";
+  } catch {
+    return false;
+  }
+}

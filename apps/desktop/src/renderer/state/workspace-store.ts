@@ -13,6 +13,7 @@ import {
   getAgentCanvasApi,
   type DiagramListItem,
   type GitStatusSummary,
+  type RecentWorkspace,
   type WorkspaceSnapshot,
 } from "../lib/electron-api";
 
@@ -29,15 +30,20 @@ interface WorkspaceState {
   diagrams: DiagramListItem[];
   document: DiagramDocument | null;
   gitStatus: GitStatusSummary | null;
+  recentWorkspaces: RecentWorkspace[];
   selection: Selection | null;
   preview: PatchPreviewResult | null;
   activeProposalId: string | null;
   drift: DriftResult | null;
   toast: string | null;
+  lastError: string | null;
   busy: boolean;
+  dirty: boolean;
   past: DiagramDocument[];
   future: DiagramDocument[];
   openWorkspace(): Promise<void>;
+  openRecentWorkspace(workspacePath: string): Promise<void>;
+  loadRecentWorkspaces(): Promise<void>;
   createSampleWorkspace(): Promise<void>;
   createEmptyWorkspace(): Promise<void>;
   loadDiagram(diagramId: string): Promise<void>;
@@ -86,12 +92,15 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   diagrams: [],
   document: null,
   gitStatus: null,
+  recentWorkspaces: [],
   selection: null,
   preview: null,
   activeProposalId: null,
   drift: null,
   toast: null,
+  lastError: null,
   busy: false,
+  dirty: false,
   past: [],
   future: [],
 
@@ -102,6 +111,18 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         applySnapshot(set, snapshot);
       }
     });
+  },
+
+  async openRecentWorkspace(workspacePath: string) {
+    await run(set, async () => applySnapshot(set, await api.openWorkspacePath(workspacePath)));
+  },
+
+  async loadRecentWorkspaces() {
+    try {
+      set({ recentWorkspaces: await api.getRecentWorkspaces() });
+    } catch {
+      set({ recentWorkspaces: [] });
+    }
   },
 
   async createSampleWorkspace() {
@@ -143,7 +164,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     await run(set, async () => {
       const snapshot = await api.saveDiagram(document);
       applySnapshot(set, snapshot, document);
-      set({ toast: "Saved diagram, Mermaid, and Markdown exports" });
+      set({ toast: "Saved diagram, Mermaid, and Markdown exports", dirty: false });
     });
   },
 
@@ -151,7 +172,15 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     await run(set, async () => {
       const snapshot = await api.importMermaid({ title, source });
       applySnapshot(set, snapshot);
-      set({ toast: "Imported Mermaid as Diagram IR" });
+      const unsupported = snapshot.document?.metadata.unsupportedMermaidLines;
+      const unsupportedCount = Array.isArray(unsupported)
+        ? unsupported.filter((line) => typeof line === "string").length
+        : 0;
+      set({
+        toast: unsupportedCount
+          ? `Imported Mermaid with ${unsupportedCount} unsupported line${unsupportedCount === 1 ? "" : "s"}`
+          : "Imported Mermaid as Diagram IR",
+      });
     });
   },
 
@@ -199,9 +228,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }
     await run(set, async () => {
       const next = await api.applyProposal(document, proposalId);
-      commit(set, get, next, "Proposal accepted");
-      await api.saveDiagram(next);
-      set({ preview: null, activeProposalId: null });
+      const snapshot = await api.saveDiagram(next);
+      applySnapshot(set, snapshot, next);
+      set({ preview: null, activeProposalId: null, toast: "Proposal accepted", dirty: false });
     });
   },
 
@@ -212,9 +241,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }
     await run(set, async () => {
       const next = await api.rejectProposal(document, proposalId);
-      commit(set, get, next, "Proposal rejected");
-      await api.saveDiagram(next);
-      set({ preview: null, activeProposalId: null });
+      const snapshot = await api.saveDiagram(next);
+      applySnapshot(set, snapshot, next);
+      set({ preview: null, activeProposalId: null, toast: "Proposal rejected", dirty: false });
     });
   },
 
@@ -505,20 +534,24 @@ function applySnapshot(
     diagrams: snapshot.diagrams,
     document: documentOverride ?? snapshot.document,
     gitStatus: snapshot.gitStatus,
+    recentWorkspaces: snapshot.recentWorkspaces,
     selection: null,
     preview: null,
     activeProposalId: null,
     past: [],
     future: [],
+    dirty: false,
+    lastError: null,
   });
 }
 
 async function run(set: StoreSet, action: () => Promise<void>): Promise<void> {
-  set({ busy: true, toast: null });
+  set({ busy: true, toast: null, lastError: null });
   try {
     await action();
   } catch (error) {
-    set({ toast: error instanceof Error ? error.message : String(error) });
+    const message = error instanceof Error ? error.message : String(error);
+    set({ toast: message, lastError: message });
   } finally {
     set({ busy: false });
   }
@@ -533,6 +566,7 @@ function commit(set: StoreSet, get: StoreGet, document: DiagramDocument, toast?:
     preview: null,
     activeProposalId: null,
     ...(toast ? { toast } : {}),
+    dirty: true,
   });
 }
 

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   applyPatch,
+  addProposal,
+  applyProposal,
   createSampleDiagram,
   previewPatch,
   type DiagramPatchOp,
@@ -76,5 +78,47 @@ describe("patch operations", () => {
     expect(preview.validation.ok).toBe(true);
     expect(preview.previewDocument?.nodes.length).toBe(originalCount + 1);
     expect(document.nodes.length).toBe(originalCount);
+  });
+
+  it("rejects invalid note target ids", () => {
+    const document = createSampleDiagram();
+    const preview = previewPatch(document, [
+      {
+        op: "add_note",
+        note: { id: "note.bad", text: "Bad target", kind: "warning", targetId: "node.missing" },
+      },
+    ]);
+
+    expect(preview.validation.ok).toBe(false);
+    expect(preview.validation.errors.join("\n")).toContain("target not found");
+  });
+
+  it("applyProposal marks the proposal accepted and keeps proposal history", () => {
+    const document = createSampleDiagram();
+    const withProposal = addProposal(document, {
+      id: "proposal.add-node",
+      title: "Add node",
+      summary: "Adds a node.",
+      author: "agent",
+      ops: [
+        {
+          op: "add_node",
+          node: {
+            id: "node.history",
+            type: "service",
+            label: "History",
+            codeRefs: [],
+            tags: [],
+            metadata: {},
+          },
+        },
+      ],
+    });
+
+    const applied = applyProposal(withProposal, "proposal.add-node");
+    expect(applied.proposals.find((proposal) => proposal.id === "proposal.add-node")?.status).toBe(
+      "accepted",
+    );
+    expect(applied.nodes.some((node) => node.id === "node.history")).toBe(true);
   });
 });

@@ -20,33 +20,55 @@ The canonical source of truth is **Diagram IR** (`*.diagram.json`). Mermaid is i
 ## Install
 
 ```powershell
-corepack pnpm install
+corepack enable
+corepack prepare pnpm@9.15.4 --activate
+pnpm install
 ```
 
-If your shell has a pnpm shim available, `pnpm install` works too. This Windows environment required `corepack pnpm`, so the internal scripts use that form.
+If `corepack enable` cannot write global shims on Windows, create a user-local shim directory and put it on `PATH`, then run the same `pnpm` commands:
+
+```powershell
+$shim = Join-Path $env:LOCALAPPDATA "CorepackShims"
+New-Item -ItemType Directory -Force $shim | Out-Null
+corepack enable --install-directory $shim
+$env:PATH = "$shim;$env:PATH"
+pnpm install
+```
 
 ## Development
 
 ```powershell
-corepack pnpm dev
+pnpm dev
 ```
 
-This builds `@agent-canvas/core`, starts the Vite renderer, watches Electron main/preload TypeScript, and launches Electron.
+This builds `@agent-canvas/core`, starts the Vite renderer, bundles/watches Electron main and preload with tsup, and launches Electron.
+
+Browser preview fallback is explicit only:
+
+```powershell
+$env:VITE_AGENTCANVAS_BROWSER_PREVIEW = "1"
+pnpm --filter @agent-canvas/desktop build:renderer
+```
+
+Normal desktop startup requires the preload IPC bridge. If `window.agentCanvas` is missing, the app shows a bridge initialization error instead of silently using the preview fallback.
 
 ## Build And Test
 
 ```powershell
-corepack pnpm typecheck
-corepack pnpm lint
-corepack pnpm test
-corepack pnpm build
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm build
 ```
 
 Packaging is available through Electron Builder:
 
 ```powershell
-corepack pnpm package
+pnpm package
+pnpm package:dir
 ```
+
+`package:dir` runs `electron-builder --dir` and is the fastest packaging sanity check. Main and preload are bundled so packaged apps do not depend on monorepo workspace symlinks for `@agent-canvas/core`.
 
 CI runs install, typecheck, lint, test, and build on Ubuntu, macOS, and Windows.
 
@@ -89,28 +111,39 @@ Supported Mermaid subset:
 - `-->`, labeled `-- label -->`, labeled `-->|label|`, `-.->`, and `==>`
 - simple `subgraph ... end`
 - comments as preserved metadata
+- line-end semicolons, simple multi-statement lines, and inline `%%` comments outside quoted labels
 
 Unsupported lines are stored in `metadata.unsupportedMermaidLines` and surfaced as warning notes instead of crashing import.
+
+AgentCanvas export separates Mermaid-safe aliases from canonical IR ids. When an id such as `node.redis_cache` would be unsafe or collide after aliasing, the exporter emits restoration comments:
+
+```mermaid
+%% agentcanvas:id node_redis_cache node.redis_cache
+%% agentcanvas:data ...
+```
+
+On import, AgentCanvas reads those comments to restore original node/group ids, edge ids, target ids, layout keys, and proposal/comment/task metadata. Mermaid files without AgentCanvas comments still import normally using their Mermaid ids as IR ids.
 
 ## MCP Server
 
 Build first, then run:
 
 ```powershell
-corepack pnpm build
-corepack pnpm mcp -- --workspace C:\path\to\workspace
+pnpm build
+pnpm mcp -- --workspace C:\path\to\workspace
 ```
 
 Direct package form:
 
 ```powershell
-corepack pnpm --filter @agent-canvas/mcp-server start -- --workspace C:\path\to\workspace
+pnpm --filter @agent-canvas/mcp-server start -- --workspace C:\path\to\workspace
 ```
 
 Tools:
 
 - `workspace_get_info`
 - `workspace_list_diagrams`
+- `workspace_create_sample`
 - `diagram_fetch`
 - `diagram_export_mermaid`
 - `diagram_import_mermaid`
@@ -124,6 +157,10 @@ Tools:
 
 `diagram_apply_proposal` refuses by default unless `AGENTCANVAS_ALLOW_MCP_APPLY=1` is set. The normal model is: agents propose, humans approve in the app.
 
+`workspace_get_info` and `workspace_list_diagrams` are read-only and do not create sample files in an empty workspace. Use `workspace_create_sample` when sample generation is desired.
+
+Patch inputs are validated at the MCP boundary with Zod. Invalid op shapes, missing edge endpoints, duplicate ids, or invalid targets return structured `{ ok: false, errors: [...] }` responses and do not save proposals.
+
 Example agent flow:
 
 ```text
@@ -136,8 +173,11 @@ Example agent flow:
 ## Security Model
 
 - Renderer has no direct filesystem access.
-- Electron uses `contextIsolation: true` and `nodeIntegration: false`.
-- Filesystem operations go through preload IPC and core storage helpers.
+- Electron uses `contextIsolation: true`, `nodeIntegration: false`, and `sandbox: true`.
+- Filesystem operations go through a narrow preload IPC bridge and core storage helpers.
+- IPC inputs for diagram save, import, auto-layout, proposal preview/apply/reject, drift detection, and diagram creation are Zod-validated before reaching core logic.
+- External window opens are restricted to `http:`, `https:`, and `mailto:`. `file:`, `javascript:`, and `data:` external opens are denied, and external navigation is blocked.
+- Production renderer HTML includes a restrictive CSP compatible with the Vite dev server.
 - Writes are constrained to the selected workspace with resolved path checks.
 - Saves use atomic temporary-file writes.
 - Git integration only runs non-destructive `git status --short`.
@@ -149,7 +189,7 @@ Example agent flow:
 Generate or refresh the bundled sample:
 
 ```powershell
-corepack pnpm sample
+pnpm sample
 ```
 
 The sample lives at `examples/sample-workspace` and contains the System Overview diagram with Client, Web App, API Gateway, Auth Service, User Service, Redis Cache, PostgreSQL, Job Queue, Worker, and External Payment API.
@@ -158,9 +198,10 @@ The sample lives at `examples/sample-workspace` and contains the System Overview
 
 - Mermaid support is intentionally a practical flowchart subset.
 - Layout uses a deterministic layered/grid fallback instead of full ELK routing.
-- Desktop dev flow is functional but intentionally simple for the MVP.
 - Proposal partial-apply UI is not implemented; accept/reject applies the whole proposal.
 - Repo scan is regex-based and not a full TypeScript AST index.
+- Repo scan has safety limits for maximum file count and file size; skipped or malformed files are reported as warnings.
+- Fully signed installers still depend on OS signing/notarization setup; use `package:dir` for unsigned packaging verification.
 
 ## Roadmap
 
@@ -168,5 +209,5 @@ The sample lives at `examples/sample-workspace` and contains the System Overview
 - Partial proposal apply UI.
 - Richer group editing and collapse behavior.
 - Deeper TypeScript symbol index and drift calibration.
-- Workspace-local settings and recent workspace persistence.
+- Workspace-local settings.
 - More import/export projections while keeping Diagram IR canonical.

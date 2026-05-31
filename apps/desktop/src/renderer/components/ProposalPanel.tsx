@@ -9,6 +9,7 @@ export function ProposalPanel() {
   const clearPreview = useWorkspaceStore((state) => state.clearPreview);
   const acceptProposal = useWorkspaceStore((state) => state.acceptProposal);
   const rejectProposal = useWorkspaceStore((state) => state.rejectProposal);
+  const busy = useWorkspaceStore((state) => state.busy);
 
   if (!document) {
     return null;
@@ -46,15 +47,19 @@ export function ProposalPanel() {
             ))}
           </div>
           <div className="button-row">
-            <button onClick={() => void previewProposal(proposal.id)} type="button">
+            <button onClick={() => void previewProposal(proposal.id)} disabled={busy} type="button">
               <Eye size={15} />
               Preview
             </button>
-            <button onClick={() => void acceptProposal(proposal.id)} type="button">
+            <button
+              onClick={() => void acceptProposal(proposal.id)}
+              disabled={busy || (activeProposalId === proposal.id && preview?.validation.ok === false)}
+              type="button"
+            >
               <Check size={15} />
               Accept
             </button>
-            <button onClick={() => void rejectProposal(proposal.id)} type="button">
+            <button onClick={() => void rejectProposal(proposal.id)} disabled={busy} type="button">
               <X size={15} />
               Reject
             </button>
@@ -71,6 +76,15 @@ export function ProposalPanel() {
           <button onClick={clearPreview} type="button">
             Clear
           </button>
+        </div>
+      ) : null}
+
+      {preview && !preview.validation.ok ? (
+        <div className="warning-block">
+          <strong>Preview validation failed</strong>
+          {preview.validation.errors.map((error) => (
+            <code key={error}>{error}</code>
+          ))}
         </div>
       ) : null}
 

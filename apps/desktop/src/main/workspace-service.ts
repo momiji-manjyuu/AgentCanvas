@@ -1,29 +1,40 @@
 import { execFile } from "node:child_process";
+import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { app, dialog } from "electron";
 import {
   addProposal,
+  atomicWrite,
   applyProposal,
   autoLayout,
   createEmptyDiagram,
   createRedisCacheProposal,
   createSampleWorkspace,
   detectDrift,
+  diagramIdFromSlug,
   exportMarkdown,
   exportMermaid,
   importMermaid,
   listDiagrams,
   loadDiagram,
+  pathExists,
   previewPatch,
   rejectProposal,
   resolveWorkspacePath,
   saveDiagramBundle,
   slugify,
+  uniqueDiagramId,
+  uniqueDiagramSlug,
   type DiagramDocument,
   type DiagramPatchOp,
   type DiagramProposal,
 } from "@agent-canvas/core";
+import {
+  rememberRecentWorkspace,
+  normalizeRecentWorkspaces,
+  type RecentWorkspace,
+} from "./recent-workspaces.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -33,6 +44,7 @@ export interface WorkspaceSnapshot {
   diagrams: Awaited<ReturnType<typeof listDiagrams>>;
   document: DiagramDocument | null;
   gitStatus: GitStatusSummary;
+  recentWorkspaces: RecentWorkspace[];
 }
 
 export interface GitStatusSummary {
@@ -74,6 +86,7 @@ export async function createSampleWorkspaceInDocuments(): Promise<WorkspaceSnaps
 
 export async function openWorkspace(workspacePath: string): Promise<WorkspaceSnapshot> {
   currentWorkspacePath = resolveWorkspacePath(workspacePath);
+  await rememberWorkspace(currentWorkspacePath);
   return workspaceSnapshot();
 }
 
@@ -87,6 +100,7 @@ export async function workspaceSnapshot(): Promise<WorkspaceSnapshot> {
     diagrams,
     document,
     gitStatus: await getGitStatus(workspacePath),
+    recentWorkspaces: await getRecentWorkspaces(),
   };
 }
 
@@ -116,8 +130,10 @@ export async function importWorkspaceMermaid(input: {
   slug?: string;
 }): Promise<WorkspaceSnapshot> {
   const workspacePath = requireWorkspace();
-  const document = importMermaid(input.source, input);
-  await saveDiagramBundle(workspacePath, document, input.slug ?? slugify(input.title));
+  const slug = await uniqueDiagramSlug(workspacePath, input.slug ?? slugify(input.title));
+  const id = await uniqueDiagramId(workspacePath, diagramIdFromSlug(slug));
+  const document = importMermaid(input.source, { ...input, slug, id });
+  await saveDiagramBundle(workspacePath, document, slug);
   return {
     ...(await workspaceSnapshot()),
     document,
@@ -165,6 +181,39 @@ export function exportWorkspaceMarkdown(document: DiagramDocument): string {
 
 export function proposalSummary(proposal: DiagramProposal): string {
   return `${proposal.title}: ${proposal.ops.length} operation${proposal.ops.length === 1 ? "" : "s"}`;
+}
+
+export async function getRecentWorkspaces(): Promise<RecentWorkspace[]> {
+  const filePath = recentWorkspacesFile();
+  if (!(await pathExists(filePath))) {
+    return [];
+  }
+  let parsed: RecentWorkspace[];
+  try {
+    const raw = await readFile(filePath, "utf8");
+    parsed = normalizeRecentWorkspaces(JSON.parse(raw));
+  } catch {
+    return [];
+  }
+  const existing: RecentWorkspace[] = [];
+  for (const workspace of parsed) {
+    if (await pathExists(workspace.path)) {
+      existing.push(workspace);
+    }
+  }
+  return existing;
+}
+
+async function rememberWorkspace(workspacePath: string): Promise<void> {
+  const filePath = recentWorkspacesFile();
+  const existing = await getRecentWorkspaces();
+  const next = rememberRecentWorkspace(existing, workspacePath);
+  await mkdir(path.dirname(filePath), { recursive: true });
+  await atomicWrite(filePath, `${JSON.stringify(next, null, 2)}\n`);
+}
+
+function recentWorkspacesFile(): string {
+  return path.join(app.getPath("userData"), "recent-workspaces.json");
 }
 
 async function getGitStatus(workspacePath: string): Promise<GitStatusSummary> {

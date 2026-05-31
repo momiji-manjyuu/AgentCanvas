@@ -30,17 +30,25 @@ export interface GitStatusSummary {
   message?: string;
 }
 
+export interface RecentWorkspace {
+  path: string;
+  name: string;
+  lastOpenedAt: string;
+}
+
 export interface WorkspaceSnapshot {
   workspacePath: string;
   workspaceName: string;
   diagrams: DiagramListItem[];
   document: DiagramDocument | null;
   gitStatus: GitStatusSummary;
+  recentWorkspaces: RecentWorkspace[];
 }
 
 export interface AgentCanvasApi {
   openWorkspace(): Promise<WorkspaceSnapshot | null>;
   openWorkspacePath(workspacePath: string): Promise<WorkspaceSnapshot>;
+  getRecentWorkspaces(): Promise<RecentWorkspace[]>;
   createEmptyWorkspace(): Promise<WorkspaceSnapshot | null>;
   createSampleWorkspace(): Promise<WorkspaceSnapshot>;
   loadDiagram(diagramId: string): Promise<DiagramDocument>;
@@ -71,6 +79,9 @@ const fallbackApi: AgentCanvasApi = {
   },
   async openWorkspacePath() {
     return sampleSnapshot();
+  },
+  async getRecentWorkspaces() {
+    return [];
   },
   async createEmptyWorkspace() {
     fallbackDocument = await createEmptyDiagramLike("Untitled Diagram");
@@ -126,13 +137,16 @@ const fallbackApi: AgentCanvasApi = {
     return fallbackDocument;
   },
   async detectDrift() {
-    return { issues: [], scan: { files: [], packageManifests: [], symbols: [] } };
+    return { issues: [], scan: { files: [], packageManifests: [], symbols: [], warnings: [] } };
   },
 };
 
 export function getAgentCanvasApi(): AgentCanvasApi {
-  if (!window.agentCanvas) {
+  if (!window.agentCanvas && isBrowserPreviewMode()) {
     return fallbackApi;
+  }
+  if (!window.agentCanvas) {
+    return missingBridgeApi;
   }
   return window.agentCanvas as unknown as AgentCanvasApi;
 }
@@ -156,6 +170,7 @@ function sampleSnapshot(): WorkspaceSnapshot {
     ],
     document: fallbackDocument,
     gitStatus: { ok: false, status: [], message: "Browser preview mode" },
+    recentWorkspaces: [],
   };
 }
 
@@ -179,3 +194,19 @@ async function createEmptyDiagramLike(title: string): Promise<DiagramDocument> {
     metadata: { slug: "untitled-diagram" },
   };
 }
+
+export function isBrowserPreviewMode(): boolean {
+  return import.meta.env.DEV && import.meta.env.VITE_AGENTCANVAS_BROWSER_PREVIEW === "1";
+}
+
+export function isAgentCanvasBridgeUnavailable(): boolean {
+  return !window.agentCanvas && !isBrowserPreviewMode();
+}
+
+const missingBridgeApi = new Proxy({} as AgentCanvasApi, {
+  get() {
+    return async () => {
+      throw new Error("Preload/IPC is not initialized. Restart the desktop app or enable browser preview explicitly.");
+    };
+  },
+});

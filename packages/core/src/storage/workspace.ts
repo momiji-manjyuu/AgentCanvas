@@ -122,10 +122,11 @@ export async function saveDiagramBundle(
 
 export async function createEmptyDiagram(workspacePath: string, title = "Untitled Diagram"): Promise<DiagramDocument> {
   const now = new Date().toISOString();
-  const slug = slugify(title);
+  const slug = await uniqueDiagramSlug(workspacePath, slugify(title));
+  const id = await uniqueDiagramId(workspacePath, diagramIdFromSlug(slug));
   const document: DiagramDocument = {
     schemaVersion: SCHEMA_VERSION,
-    id: `diagram.${slug}`,
+    id,
     title,
     createdAt: now,
     updatedAt: now,
@@ -146,8 +147,10 @@ export async function createEmptyDiagram(workspacePath: string, title = "Untitle
 
 export async function createSampleWorkspace(workspacePath: string): Promise<DiagramDocument> {
   await ensureWorkspace(workspacePath);
-  const document = createSampleDiagram();
-  await saveDiagramBundle(workspacePath, document, "system-overview");
+  const slug = await uniqueDiagramSlug(workspacePath, "system-overview");
+  const id = await uniqueDiagramId(workspacePath, diagramIdFromSlug(slug));
+  const document = withDiagramIdentity(createSampleDiagram(), slug, id);
+  await saveDiagramBundle(workspacePath, document, slug);
   return document;
 }
 
@@ -181,6 +184,52 @@ export function slugify(value: string): string {
 
 export function stableJson(value: unknown): string {
   return JSON.stringify(sortForJson(value), null, 2);
+}
+
+export async function uniqueDiagramSlug(workspacePath: string, baseSlug: string): Promise<string> {
+  const root = resolveWorkspacePath(workspacePath);
+  const safeBase = slugify(baseSlug);
+  let candidate = safeBase;
+  let index = 2;
+
+  while (
+    (await pathExists(ensureWithinWorkspace(root, path.join("design", "diagrams", `${candidate}.diagram.json`)))) ||
+    (await pathExists(ensureWithinWorkspace(root, path.join("design", "diagrams", `${candidate}.mmd`)))) ||
+    (await pathExists(ensureWithinWorkspace(root, path.join("design", "diagrams", `${candidate}.md`))))
+  ) {
+    candidate = `${safeBase}-${index}`;
+    index += 1;
+  }
+
+  return candidate;
+}
+
+export async function uniqueDiagramId(workspacePath: string, baseId: string): Promise<string> {
+  const diagrams = await listDiagrams(workspacePath);
+  const existing = new Set(diagrams.map((diagram) => diagram.id));
+  let candidate = baseId;
+  let index = 2;
+  while (existing.has(candidate)) {
+    candidate = `${baseId}.${index}`;
+    index += 1;
+  }
+  return candidate;
+}
+
+export function diagramIdFromSlug(slug: string): string {
+  return `diagram.${slug.replace(/-/g, "_")}`;
+}
+
+export function withDiagramIdentity(
+  document: DiagramDocument,
+  slug: string,
+  id = diagramIdFromSlug(slug),
+): DiagramDocument {
+  return DiagramDocumentSchema.parse({
+    ...document,
+    id,
+    metadata: { ...document.metadata, slug },
+  });
 }
 
 function slugFromDocument(document: DiagramDocument): string {

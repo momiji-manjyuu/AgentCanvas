@@ -4,7 +4,11 @@ import { ensureWithinWorkspace, pathExists, resolveWorkspacePath } from "../stor
 import { scanRepo, type RepoScanResult } from "./scanRepo.js";
 
 export type DriftSeverity = "info" | "warning" | "error";
-export type DriftIssueType = "missing_file" | "missing_symbol" | "unlinked_code_candidate";
+export type DriftIssueType =
+  | "invalid_code_ref_path"
+  | "missing_file"
+  | "missing_symbol"
+  | "unlinked_code_candidate";
 
 export interface DriftIssue {
   type: DriftIssueType;
@@ -31,7 +35,20 @@ export async function detectDrift(
 
   for (const node of document.nodes) {
     for (const codeRef of node.codeRefs ?? []) {
-      const absolute = ensureWithinWorkspace(root, codeRef.path);
+      let absolute: string;
+      try {
+        absolute = ensureWithinWorkspace(root, codeRef.path);
+      } catch {
+        issues.push({
+          type: "invalid_code_ref_path",
+          severity: "error",
+          message: `${node.label} references a path outside the workspace: ${codeRef.path}`,
+          nodeId: node.id,
+          path: codeRef.path,
+          ...(codeRef.symbol ? { symbol: codeRef.symbol } : {}),
+        });
+        continue;
+      }
       const relative = path.relative(root, absolute).replace(/\\/g, "/");
       linkedFiles.add(relative);
 
@@ -66,14 +83,14 @@ export async function detectDrift(
   }
 
   for (const file of scan.files) {
-    if (!/^src\/.+\.(ts|tsx|js|jsx)$/.test(file)) {
+    if (!/^(src|lib|app|server)\/.+\.(ts|tsx|js|jsx)$/.test(file)) {
       continue;
     }
     if (!linkedFiles.has(file)) {
       issues.push({
         type: "unlinked_code_candidate",
         severity: "info",
-        message: `${file} is present in src but not linked from the diagram`,
+        message: `${file} is present in the scanned code paths but not linked from the diagram`,
         path: file,
       });
     }

@@ -1,16 +1,51 @@
 import type { DiagramDocument, DiagramEdge, DiagramNode } from "../schema/diagram.js";
+import {
+  createMermaidIdMap,
+  formatAgentCanvasDataComment,
+  formatIdMappingComment,
+} from "./idMapping.js";
+
+interface AgentCanvasMermaidData {
+  version: 1;
+  document: {
+    id: string;
+    title: string;
+    description?: string;
+    createdAt: string;
+    updatedAt: string;
+  };
+  edgeIds: Array<{ id: string; from: string; to: string }>;
+  notes: DiagramDocument["notes"];
+  tasks: DiagramDocument["tasks"];
+  comments: DiagramDocument["comments"];
+  layout: DiagramDocument["layout"];
+  proposals: DiagramDocument["proposals"];
+  metadata: DiagramDocument["metadata"];
+}
 
 export function exportMermaid(document: DiagramDocument): string {
   const direction = document.direction === "TB" ? "TD" : document.direction;
+  const idMap = createMermaidIdMap([
+    ...document.nodes.map((node) => node.id),
+    ...document.groups.map((group) => group.id),
+  ]);
   const lines = [`flowchart ${direction}`];
   const emitted = new Set<string>();
 
+  for (const entry of idMap.entries) {
+    if (entry.alias !== entry.original) {
+      lines.push(formatIdMappingComment(entry));
+    }
+  }
+
+  lines.push(formatAgentCanvasDataComment(exportedData(document)));
+
   for (const group of document.groups) {
-    lines.push(`  subgraph ${toMermaidId(group.id)}["${escapeLabel(group.label)}"]`);
+    lines.push(`  subgraph ${idMap.toAlias(group.id)}["${escapeLabel(group.label)}"]`);
     for (const nodeId of group.nodeIds) {
       const node = document.nodes.find((candidate) => candidate.id === nodeId);
       if (node) {
-        lines.push(`    ${nodeDefinition(node)}`);
+        lines.push(`    ${nodeDefinition(node, idMap.toAlias(node.id))}`);
         emitted.add(node.id);
       }
     }
@@ -20,7 +55,7 @@ export function exportMermaid(document: DiagramDocument): string {
 
   for (const node of document.nodes) {
     if (!emitted.has(node.id)) {
-      lines.push(`  ${nodeDefinition(node)}`);
+      lines.push(`  ${nodeDefinition(node, idMap.toAlias(node.id))}`);
     }
   }
 
@@ -29,14 +64,13 @@ export function exportMermaid(document: DiagramDocument): string {
   }
 
   for (const edge of document.edges) {
-    lines.push(`  ${edgeDefinition(edge)}`);
+    lines.push(`  ${edgeDefinition(edge, idMap.toAlias(edge.from), idMap.toAlias(edge.to))}`);
   }
 
   return `${lines.join("\n").trimEnd()}\n`;
 }
 
-function nodeDefinition(node: DiagramNode): string {
-  const id = toMermaidId(node.id);
+function nodeDefinition(node: DiagramNode, id: string): string {
   const label = escapeLabel(node.label);
 
   switch (node.type) {
@@ -58,9 +92,7 @@ function nodeDefinition(node: DiagramNode): string {
   }
 }
 
-function edgeDefinition(edge: DiagramEdge): string {
-  const from = toMermaidId(edge.from);
-  const to = toMermaidId(edge.to);
+function edgeDefinition(edge: DiagramEdge, from: string, to: string): string {
   const label = edge.label ? escapeLabel(edge.label) : undefined;
   const operator = edgeOperator(edge);
 
@@ -89,10 +121,32 @@ function edgeOperator(edge: DiagramEdge): string {
   return arrow === "none" ? "---" : "-->";
 }
 
-function toMermaidId(id: string): string {
-  return id.replace(/[^A-Za-z0-9_]/g, "_").replace(/^([0-9])/, "_$1");
+function escapeLabel(label: string): string {
+  return label
+    .replace(/\\/g, "\\\\")
+    .replace(/\r/g, "\\r")
+    .replace(/\n/g, "\\n")
+    .replace(/"/g, '\\"')
+    .replace(/\|/g, "\\|")
+    .replace(/\]/g, "\\]");
 }
 
-function escapeLabel(label: string): string {
-  return label.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+function exportedData(document: DiagramDocument): AgentCanvasMermaidData {
+  return {
+    version: 1,
+    document: {
+      id: document.id,
+      title: document.title,
+      ...(document.description ? { description: document.description } : {}),
+      createdAt: document.createdAt,
+      updatedAt: document.updatedAt,
+    },
+    edgeIds: document.edges.map((edge) => ({ id: edge.id, from: edge.from, to: edge.to })),
+    notes: document.notes,
+    tasks: document.tasks,
+    comments: document.comments,
+    layout: document.layout,
+    proposals: document.proposals,
+    metadata: document.metadata,
+  };
 }

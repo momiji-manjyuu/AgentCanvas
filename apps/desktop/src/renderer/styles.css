@@ -573,6 +573,27 @@ code {
   overflow-wrap: anywhere;
 }
 
+.code-ref-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(88px, 0.55fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.code-ref-row button {
+  width: 32px;
+  min-height: 32px;
+  padding: 0;
+}
+
+.field-error,
+.inline-error {
+  margin: 0;
+  color: #b91c1c;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .muted {
   margin: 0;
   color: #64748b;
@@ -711,6 +732,19 @@ code {
   box-shadow: 0 16px 34px rgba(15, 23, 42, 0.17);
 }
 
+.inline-error {
+  position: fixed;
+  left: 286px;
+  bottom: 18px;
+  z-index: 10;
+  max-width: 520px;
+  border: 1px solid #fecaca;
+  border-radius: 7px;
+  background: #fff1f2;
+  padding: 9px 11px;
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.12);
+}
+
 .welcome-screen {
   display: grid;
   place-items: center;
@@ -758,6 +792,33 @@ code {
 
 .welcome-message {
   margin-top: 14px;
+}
+
+.recent-workspaces {
+  display: grid;
+  gap: 7px;
+  margin-top: 20px;
+}
+
+.recent-workspaces strong {
+  color: #334155;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.recent-workspaces button {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  justify-content: stretch;
+  width: 100%;
+  text-align: left;
+}
+
+.recent-workspaces span,
+.recent-workspaces code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 1180px) {

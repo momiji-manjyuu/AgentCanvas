@@ -20,16 +20,19 @@ export function Toolbar() {
   const undo = useWorkspaceStore((state) => state.undo);
   const redo = useWorkspaceStore((state) => state.redo);
   const addNode = useWorkspaceStore((state) => state.addNode);
+  const busy = useWorkspaceStore((state) => state.busy);
+  const dirty = useWorkspaceStore((state) => state.dirty);
 
   return (
     <header className="toolbar">
       <div className="toolbar-group">
-        <button title="Save" onClick={() => void save()} type="button">
+        <button title="Save" onClick={() => void save()} disabled={busy || !dirty} type="button">
           <Save size={16} />
         </button>
         <button
           title="Export Mermaid"
           onClick={() => void copyText(document ? exportMermaid(document) : "", "Mermaid copied")}
+          disabled={busy}
           type="button"
         >
           <Waypoints size={16} />
@@ -37,31 +40,32 @@ export function Toolbar() {
         <button
           title="Export Markdown"
           onClick={() => void copyText(document ? exportMarkdown(document) : "", "Markdown copied")}
+          disabled={busy}
           type="button"
         >
           <ScrollText size={16} />
         </button>
       </div>
       <div className="toolbar-group">
-        <button title="Auto Layout" onClick={() => void autoLayout()} type="button">
+        <button title="Auto Layout" onClick={() => void autoLayout()} disabled={busy} type="button">
           <LayoutGrid size={16} />
         </button>
-        <button title="Detect Drift" onClick={() => void detectDrift()} type="button">
+        <button title="Detect Drift" onClick={() => void detectDrift()} disabled={busy} type="button">
           <Waypoints size={16} />
         </button>
-        <button title="Create Sample Proposal" onClick={() => void createSampleProposal()} type="button">
+        <button title="Create Sample Proposal" onClick={() => void createSampleProposal()} disabled={busy} type="button">
           <GitPullRequestCreate size={16} />
         </button>
       </div>
       <div className="toolbar-spacer" />
       <div className="toolbar-group">
-        <button title="Add Node" onClick={() => addNode("service")} type="button">
+        <button title="Add Node" onClick={() => addNode("service")} disabled={busy} type="button">
           <Plus size={16} />
         </button>
-        <button title="Undo" onClick={undo} type="button">
+        <button title="Undo" onClick={undo} disabled={busy} type="button">
           <Undo2 size={16} />
         </button>
-        <button title="Redo" onClick={redo} type="button">
+        <button title="Redo" onClick={redo} disabled={busy} type="button">
           <Redo2 size={16} />
         </button>
       </div>
@@ -73,6 +77,10 @@ async function copyText(text: string, message: string): Promise<void> {
   if (!text) {
     return;
   }
-  await navigator.clipboard.writeText(text);
-  useWorkspaceStore.setState({ toast: message });
+  try {
+    await navigator.clipboard.writeText(text);
+    useWorkspaceStore.setState({ toast: message, lastError: null });
+  } catch {
+    useWorkspaceStore.setState({ toast: "Clipboard write failed", lastError: "Clipboard write failed" });
+  }
 }

@@ -6,15 +6,16 @@
   "packageManager": "pnpm@9.15.4",
   "description": "Local-first design canvas for developers and AI coding agents.",
   "scripts": {
-    "dev": "corepack pnpm --filter @agent-canvas/core build && corepack pnpm --filter @agent-canvas/desktop dev",
-    "build": "corepack pnpm -r --sort build",
-    "typecheck": "corepack pnpm --filter @agent-canvas/core build && corepack pnpm -r --sort --if-present typecheck",
+    "dev": "pnpm --filter @agent-canvas/core build && pnpm --filter @agent-canvas/desktop dev",
+    "build": "pnpm -r --sort build",
+    "typecheck": "pnpm --filter @agent-canvas/core build && pnpm -r --sort --if-present typecheck",
     "lint": "eslint . --max-warnings=0",
     "format": "prettier --write .",
-    "test": "corepack pnpm -r --sort --if-present test",
-    "mcp": "corepack pnpm --filter @agent-canvas/mcp-server start --",
-    "package": "corepack pnpm --filter @agent-canvas/desktop package",
-    "sample": "corepack pnpm --filter @agent-canvas/core sample"
+    "test": "pnpm -r --sort --if-present test",
+    "mcp": "pnpm --filter @agent-canvas/mcp-server start --",
+    "package": "pnpm --filter @agent-canvas/desktop package",
+    "package:dir": "pnpm --filter @agent-canvas/desktop package:dir",
+    "sample": "pnpm --filter @agent-canvas/core sample"
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",

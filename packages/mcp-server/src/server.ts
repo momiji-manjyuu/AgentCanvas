@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { DiagramPatchOp } from "@agent-canvas/core";
+import { DiagramPatchOpSchema } from "@agent-canvas/core";
 import { createAgentCanvasTools, VERSION } from "./tools.js";
 
 export function createServer(workspacePath: string): McpServer {
@@ -12,6 +12,7 @@ export function createServer(workspacePath: string): McpServer {
 
   server.tool("workspace_get_info", {}, async () => toText(await tools.workspace_get_info({})));
   server.tool("workspace_list_diagrams", {}, async () => toText(await tools.workspace_list_diagrams({})));
+  server.tool("workspace_create_sample", {}, async () => toText(await tools.workspace_create_sample({})));
   server.tool(
     "diagram_fetch",
     { diagramId: z.string() },
@@ -40,7 +41,7 @@ export function createServer(workspacePath: string): McpServer {
       diagramId: z.string(),
       title: z.string(),
       summary: z.string(),
-      ops: z.array(z.unknown()),
+      ops: z.array(DiagramPatchOpSchema),
       risks: z.array(z.string()).optional(),
       rationale: z.string().optional(),
     },
@@ -50,7 +51,7 @@ export function createServer(workspacePath: string): McpServer {
           diagramId: input.diagramId,
           title: input.title,
           summary: input.summary,
-          ops: input.ops as DiagramPatchOp[],
+          ops: input.ops,
           ...(input.risks ? { risks: input.risks } : {}),
           ...(input.rationale ? { rationale: input.rationale } : {}),
         }),
@@ -58,12 +59,12 @@ export function createServer(workspacePath: string): McpServer {
   );
   server.tool(
     "diagram_preview_patch",
-    { diagramId: z.string(), ops: z.array(z.unknown()) },
+    { diagramId: z.string(), ops: z.array(DiagramPatchOpSchema) },
     async (input) =>
       toText(
         await tools.diagram_preview_patch({
           diagramId: input.diagramId,
-          ops: input.ops as DiagramPatchOp[],
+          ops: input.ops,
         }),
       ),
   );

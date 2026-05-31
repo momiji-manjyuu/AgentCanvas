@@ -5,7 +5,7 @@ export function secureWebPreferences(preloadPath: string): WebPreferences {
     preload: preloadPath,
     contextIsolation: true,
     nodeIntegration: false,
-    sandbox: false,
+    sandbox: true,
     webSecurity: true,
   };
 }

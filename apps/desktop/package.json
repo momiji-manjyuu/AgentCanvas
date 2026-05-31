@@ -2,13 +2,19 @@
   "name": "@agent-canvas/desktop",
   "version": "0.1.0",
   "private": true,
+  "description": "Local-first desktop design canvas for developers and AI coding agents.",
+  "author": "AgentCanvas contributors",
   "main": "dist/main/main.js",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k \"vite --host 127.0.0.1\" \"tsc -p tsconfig.node.json --watch --preserveWatchOutput\" \"wait-on tcp:5173 dist/main/main.js && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
-    "build": "tsc -p tsconfig.node.json && vite build",
+    "dev": "concurrently -k \"vite --host 127.0.0.1\" \"tsup --watch\" \"wait-on tcp:5173 dist/main/main.js && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
+    "build": "pnpm build:main && pnpm build:renderer",
+    "build:main": "tsup",
+    "build:renderer": "vite build",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
-    "package": "corepack pnpm build && electron-builder --config electron-builder.yml"
+    "test": "vitest run",
+    "package": "pnpm build && electron-builder --config electron-builder.yml",
+    "package:dir": "pnpm build && electron-builder --dir --config electron-builder.yml"
   },
   "dependencies": {
     "@agent-canvas/core": "workspace:*",
@@ -27,6 +33,7 @@
     "cross-env": "^7.0.3",
     "electron": "^33.3.1",
     "electron-builder": "^25.1.8",
+    "tsup": "8.3.5",
     "vite": "^6.0.7",
     "wait-on": "^8.0.1"
   }

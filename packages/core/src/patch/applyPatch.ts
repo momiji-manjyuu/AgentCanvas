@@ -1,5 +1,6 @@
 import {
   DiagramDocumentSchema,
+  DiagramPatchOpSchema,
   type DiagramDocument,
   type DiagramPatchOp,
   type DiagramProposal,
@@ -15,8 +16,9 @@ export function applyPatch(
   options: ApplyPatchOptions = {},
 ): DiagramDocument {
   const next = DiagramDocumentSchema.parse(structuredClone(document));
+  const parsedOps = DiagramPatchOpSchema.array().parse(ops);
 
-  for (const op of ops) {
+  for (const op of parsedOps) {
     applySingleOp(next, op);
   }
 
@@ -136,9 +138,11 @@ function applySingleOp(document: DiagramDocument, op: DiagramPatchOp): void {
     }
     case "add_note":
       assertUnique(document.notes, op.note.id, "note");
+      assertTargetExists(document, op.note.targetId);
       document.notes.push(op.note);
       break;
     case "update_note":
+      assertTargetExists(document, op.updates.targetId);
       Object.assign(findById(document.notes, op.id, "note"), op.updates);
       break;
     case "delete_note":
@@ -146,9 +150,11 @@ function applySingleOp(document: DiagramDocument, op: DiagramPatchOp): void {
       break;
     case "add_task":
       assertUnique(document.tasks, op.task.id, "task");
+      assertTargetExists(document, op.task.targetId);
       document.tasks.push(op.task);
       break;
     case "update_task":
+      assertTargetExists(document, op.updates.targetId);
       Object.assign(findById(document.tasks, op.id, "task"), op.updates);
       break;
     case "delete_task":
@@ -156,6 +162,7 @@ function applySingleOp(document: DiagramDocument, op: DiagramPatchOp): void {
       break;
     case "add_comment":
       assertUnique(document.comments, op.comment.id, "comment");
+      assertTargetExists(document, op.comment.targetId);
       document.comments.push(op.comment);
       break;
     case "resolve_comment":
@@ -200,6 +207,18 @@ function markProposalStatus(
 
 function assertNodeExists(document: DiagramDocument, nodeId: string): void {
   findById(document.nodes, nodeId, "node");
+}
+
+function assertTargetExists(document: DiagramDocument, targetId: string | undefined): void {
+  if (!targetId) {
+    return;
+  }
+  const hasTarget =
+    document.nodes.some((node) => node.id === targetId) ||
+    document.edges.some((edge) => edge.id === targetId);
+  if (!hasTarget) {
+    throw new Error(`target not found: ${targetId}`);
+  }
 }
 
 function assertUnique(items: Array<{ id: string }>, id: string, type: string): void {

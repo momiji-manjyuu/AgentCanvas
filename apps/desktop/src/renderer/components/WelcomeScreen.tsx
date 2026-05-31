@@ -1,12 +1,20 @@
 import { FolderOpen, PackagePlus, PlusCircle } from "lucide-react";
+import { useEffect } from "react";
 import { useWorkspaceStore } from "../state/workspace-store";
 
 export function WelcomeScreen() {
   const openWorkspace = useWorkspaceStore((state) => state.openWorkspace);
   const createSampleWorkspace = useWorkspaceStore((state) => state.createSampleWorkspace);
   const createEmptyWorkspace = useWorkspaceStore((state) => state.createEmptyWorkspace);
+  const recentWorkspaces = useWorkspaceStore((state) => state.recentWorkspaces);
+  const loadRecentWorkspaces = useWorkspaceStore((state) => state.loadRecentWorkspaces);
+  const openRecentWorkspace = useWorkspaceStore((state) => state.openRecentWorkspace);
   const busy = useWorkspaceStore((state) => state.busy);
   const toast = useWorkspaceStore((state) => state.toast);
+
+  useEffect(() => {
+    void loadRecentWorkspaces();
+  }, [loadRecentWorkspaces]);
 
   return (
     <div className="welcome-screen">
@@ -28,6 +36,22 @@ export function WelcomeScreen() {
             Empty Workspace
           </button>
         </div>
+        {recentWorkspaces.length ? (
+          <div className="recent-workspaces">
+            <strong>Recent workspaces</strong>
+            {recentWorkspaces.map((workspace) => (
+              <button
+                key={workspace.path}
+                onClick={() => void openRecentWorkspace(workspace.path)}
+                disabled={busy}
+                type="button"
+              >
+                <span>{workspace.name}</span>
+                <code>{workspace.path}</code>
+              </button>
+            ))}
+          </div>
+        ) : null}
         {toast ? <p className="welcome-message">{toast}</p> : null}
       </section>
     </div>

@@ -3,6 +3,7 @@ export * from "./schema/patch.js";
 export * from "./mermaid/importMermaid.js";
 export * from "./mermaid/exportMermaid.js";
 export * from "./mermaid/exportMarkdown.js";
+export * from "./mermaid/idMapping.js";
 export * from "./patch/applyPatch.js";
 export * from "./patch/previewPatch.js";
 export * from "./patch/diff.js";
