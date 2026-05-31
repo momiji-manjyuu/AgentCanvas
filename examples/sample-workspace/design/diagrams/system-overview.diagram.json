@@ -1,0 +1,282 @@
+{
+  "comments": [],
+  "createdAt": "2026-05-30T01:51:07.265Z",
+  "description": "A sample local-first web service architecture used to explore AgentCanvas.",
+  "direction": "LR",
+  "edges": [
+    {
+      "from": "node.client",
+      "id": "edge.client.web_app",
+      "metadata": {},
+      "to": "node.web_app",
+      "type": "sync"
+    },
+    {
+      "from": "node.web_app",
+      "id": "edge.web_app.api_gateway",
+      "metadata": {},
+      "to": "node.api_gateway",
+      "type": "sync"
+    },
+    {
+      "from": "node.api_gateway",
+      "id": "edge.api_gateway.auth_service",
+      "metadata": {},
+      "to": "node.auth_service",
+      "type": "sync"
+    },
+    {
+      "from": "node.api_gateway",
+      "id": "edge.api_gateway.user_service",
+      "metadata": {},
+      "to": "node.user_service",
+      "type": "sync"
+    },
+    {
+      "from": "node.user_service",
+      "id": "edge.user_service.redis_cache",
+      "metadata": {},
+      "to": "node.redis_cache",
+      "type": "sync"
+    },
+    {
+      "from": "node.user_service",
+      "id": "edge.user_service.postgresql",
+      "metadata": {},
+      "to": "node.postgresql",
+      "type": "sync"
+    },
+    {
+      "from": "node.user_service",
+      "id": "edge.user_service.job_queue",
+      "metadata": {},
+      "to": "node.job_queue",
+      "type": "sync"
+    },
+    {
+      "from": "node.job_queue",
+      "id": "edge.job_queue.worker",
+      "metadata": {},
+      "to": "node.worker",
+      "type": "sync"
+    },
+    {
+      "from": "node.worker",
+      "id": "edge.worker.payment_api",
+      "metadata": {},
+      "to": "node.payment_api",
+      "type": "sync"
+    }
+  ],
+  "groups": [
+    {
+      "id": "group.backend",
+      "label": "Backend",
+      "metadata": {},
+      "nodeIds": [
+        "node.api_gateway",
+        "node.auth_service",
+        "node.user_service",
+        "node.redis_cache",
+        "node.postgresql",
+        "node.job_queue",
+        "node.worker"
+      ]
+    }
+  ],
+  "id": "diagram.system_overview",
+  "layout": {
+    "edges": {},
+    "nodes": {
+      "node.api_gateway": {
+        "height": 76,
+        "width": 190,
+        "x": 600,
+        "y": 0
+      },
+      "node.auth_service": {
+        "height": 76,
+        "width": 190,
+        "x": 900,
+        "y": 0
+      },
+      "node.client": {
+        "height": 76,
+        "width": 190,
+        "x": 0,
+        "y": 0
+      },
+      "node.job_queue": {
+        "height": 76,
+        "width": 190,
+        "x": 1200,
+        "y": 0
+      },
+      "node.payment_api": {
+        "height": 76,
+        "width": 190,
+        "x": 1800,
+        "y": 0
+      },
+      "node.postgresql": {
+        "height": 76,
+        "width": 190,
+        "x": 1200,
+        "y": 146
+      },
+      "node.redis_cache": {
+        "height": 76,
+        "width": 190,
+        "x": 1200,
+        "y": 292
+      },
+      "node.user_service": {
+        "height": 76,
+        "width": 190,
+        "x": 900,
+        "y": 146
+      },
+      "node.web_app": {
+        "height": 76,
+        "width": 190,
+        "x": 300,
+        "y": 0
+      },
+      "node.worker": {
+        "height": 76,
+        "width": 190,
+        "x": 1500,
+        "y": 0
+      }
+    },
+    "viewport": {
+      "x": 0,
+      "y": 0,
+      "zoom": 1
+    }
+  },
+  "metadata": {
+    "sample": true,
+    "slug": "system-overview"
+  },
+  "nodes": [
+    {
+      "codeRefs": [],
+      "id": "node.client",
+      "label": "Client",
+      "metadata": {},
+      "tags": [],
+      "type": "actor"
+    },
+    {
+      "codeRefs": [],
+      "id": "node.web_app",
+      "label": "Web App",
+      "metadata": {},
+      "tags": [],
+      "type": "component"
+    },
+    {
+      "codeRefs": [],
+      "id": "node.api_gateway",
+      "label": "API Gateway",
+      "metadata": {},
+      "tags": [],
+      "type": "service"
+    },
+    {
+      "codeRefs": [],
+      "id": "node.auth_service",
+      "label": "Auth Service",
+      "metadata": {},
+      "tags": [],
+      "type": "service"
+    },
+    {
+      "codeRefs": [],
+      "id": "node.user_service",
+      "label": "User Service",
+      "metadata": {},
+      "tags": [],
+      "type": "service"
+    },
+    {
+      "codeRefs": [],
+      "id": "node.redis_cache",
+      "label": "Redis Cache",
+      "metadata": {},
+      "tags": [],
+      "type": "cache"
+    },
+    {
+      "codeRefs": [],
+      "id": "node.postgresql",
+      "label": "PostgreSQL",
+      "metadata": {},
+      "tags": [],
+      "type": "database"
+    },
+    {
+      "codeRefs": [],
+      "id": "node.job_queue",
+      "label": "Job Queue",
+      "metadata": {},
+      "tags": [],
+      "type": "queue"
+    },
+    {
+      "codeRefs": [],
+      "id": "node.worker",
+      "label": "Worker",
+      "metadata": {},
+      "tags": [],
+      "type": "component"
+    },
+    {
+      "codeRefs": [],
+      "id": "node.payment_api",
+      "label": "External Payment API",
+      "metadata": {},
+      "tags": [],
+      "type": "external"
+    }
+  ],
+  "notes": [
+    {
+      "id": "note.redis_ttl",
+      "kind": "warning",
+      "targetId": "node.redis_cache",
+      "text": "RedisのTTL方針が未定義"
+    },
+    {
+      "id": "note.payment_retry",
+      "kind": "risk",
+      "targetId": "node.payment_api",
+      "text": "Payment API失敗時のretry/backoffが必要"
+    }
+  ],
+  "proposals": [],
+  "schemaVersion": "0.1.0",
+  "tasks": [
+    {
+      "id": "task.auth_coderef",
+      "status": "todo",
+      "targetId": "node.auth_service",
+      "title": "Auth Service の codeRef を追加"
+    },
+    {
+      "id": "task.redis_fallback",
+      "status": "todo",
+      "targetId": "node.redis_cache",
+      "title": "Redis fallback設計を書く"
+    },
+    {
+      "id": "task.worker_retry",
+      "status": "todo",
+      "targetId": "node.worker",
+      "title": "Worker retry policy を決める"
+    }
+  ],
+  "title": "System Overview",
+  "updatedAt": "2026-05-30T01:51:07.265Z"
+}

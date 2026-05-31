@@ -1,0 +1,29 @@
+{
+  "name": "agent-canvas",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.15.4",
+  "description": "Local-first design canvas for developers and AI coding agents.",
+  "scripts": {
+    "dev": "corepack pnpm --filter @agent-canvas/core build && corepack pnpm --filter @agent-canvas/desktop dev",
+    "build": "corepack pnpm -r --sort build",
+    "typecheck": "corepack pnpm --filter @agent-canvas/core build && corepack pnpm -r --sort --if-present typecheck",
+    "lint": "eslint . --max-warnings=0",
+    "format": "prettier --write .",
+    "test": "corepack pnpm -r --sort --if-present test",
+    "mcp": "corepack pnpm --filter @agent-canvas/mcp-server start --",
+    "package": "corepack pnpm --filter @agent-canvas/desktop package",
+    "sample": "corepack pnpm --filter @agent-canvas/core sample"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "@types/node": "^22.10.6",
+    "eslint": "^9.18.0",
+    "eslint-config-prettier": "^10.0.1",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.20.0",
+    "vitest": "^2.1.8"
+  }
+}
