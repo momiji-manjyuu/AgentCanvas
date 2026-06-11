@@ -1,6 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { app, BrowserWindow, shell } from "electron";
+import { setExternalChangeTarget, stopDiagramWatcher } from "./diagram-watcher-bridge.js";
 import { registerIpc } from "./ipc.js";
 import { secureWebPreferences } from "./security.js";
 
@@ -20,6 +21,7 @@ async function createWindow(): Promise<void> {
     backgroundColor: "#f6f7f9",
     webPreferences: secureWebPreferences(preloadPath),
   });
+  setExternalChangeTarget(window.webContents);
 
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (isAllowedExternalUrl(url)) {
@@ -53,6 +55,7 @@ app.whenReady().then(async () => {
 });
 
 app.on("window-all-closed", () => {
+  void stopDiagramWatcher();
   if (process.platform !== "darwin") {
     app.quit();
   }

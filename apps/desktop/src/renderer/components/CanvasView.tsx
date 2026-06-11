@@ -40,6 +40,7 @@ import {
   type Selection,
   useWorkspaceStore,
 } from "../state/workspace-store";
+import { useI18n } from "../i18n";
 
 type DiffState = "added" | "changed" | "deleted" | "normal";
 type EdgePathKind = "smoothstep" | "straight" | "bezier";
@@ -115,18 +116,13 @@ const flowEdgeTypes = {
   editable: EditableEdge,
 };
 
-const pathKindLabels: Record<EdgePathKind, string> = {
-  smoothstep: "Step",
-  straight: "Straight",
-  bezier: "Curve",
-};
-
 const MAX_STEP_BEND_LEVEL = 3;
 const STEP_NODE_AVOIDANCE_PADDING = 12;
 const STEP_HANDLE_EXIT_DISTANCE = 30;
 const STEP_AUTO_LANE_GAP = 42;
 
 export function CanvasView() {
+  const { t } = useI18n();
   const document = useWorkspaceStore((state) => state.document);
   const preview = useWorkspaceStore((state) => state.preview);
   const selection = useWorkspaceStore((state) => state.selection);
@@ -317,20 +313,20 @@ export function CanvasView() {
           <div className="context-menu-group add-node-group">
             {diagramNodeTypes.map((type) => (
               <button key={type} onClick={() => addNodeFromPaneMenu(type)} type="button">
-                Add {type}
+                {t("canvas.addNode", { type })}
               </button>
             ))}
           </div>
         ) : (
           <>
             <button onClick={() => openLabelEditor(target, x, y)} type="button">
-              Edit label
+              {t("canvas.editLabel")}
             </button>
             {target.kind === "edge" ? (
               <div className="context-menu-group">
-                {(Object.keys(pathKindLabels) as EdgePathKind[]).map((kind) => (
+                {(["smoothstep", "straight", "bezier"] as EdgePathKind[]).map((kind) => (
                   <button onClick={() => setEdgePathKind(target.id, kind)} type="button" key={kind}>
-                    {pathKindLabels[kind]} line
+                    {t("canvas.pathLine", { kind: pathKindLabel(kind, t) })}
                   </button>
                 ))}
               </div>
@@ -344,7 +340,7 @@ export function CanvasView() {
                     onClick={() => setEdgeArrow(target.id, arrow.value)}
                     type="button"
                   >
-                    {arrow.label}
+                    {edgeArrowLabel(arrow.value, t)}
                   </button>
                 ))}
               </div>
@@ -356,14 +352,14 @@ export function CanvasView() {
                   onClick={() => setStepBendLevel(target.id, targetStepBendLevel - 1)}
                   type="button"
                 >
-                  Fewer step bends
+                  {t("canvas.fewerStepBends")}
                 </button>
                 <button
                   disabled={targetStepBendLevel >= MAX_STEP_BEND_LEVEL}
                   onClick={() => setStepBendLevel(target.id, targetStepBendLevel + 1)}
                   type="button"
                 >
-                  More step bends
+                  {t("canvas.moreStepBends")}
                 </button>
               </div>
             ) : null}
@@ -375,7 +371,7 @@ export function CanvasView() {
               }}
               type="button"
             >
-              Delete
+              {t("button.delete")}
             </button>
           </>
         )}
@@ -1847,6 +1843,7 @@ function NodeLabel({
   node: DiagramNode;
   diffState: DiffState;
 }) {
+  const { t } = useI18n();
   const taskCount = document.tasks.filter(
     (task) => task.targetId === node.id && task.status !== "done",
   ).length;
@@ -1859,13 +1856,35 @@ function NodeLabel({
       <div className="node-title">{node.label}</div>
       <div className="node-meta">
         <span>{node.type}</span>
-        {node.codeRefs.length ? <span>{node.codeRefs.length} refs</span> : null}
-        {taskCount ? <span>{taskCount} tasks</span> : null}
-        {commentCount ? <span>{commentCount} comments</span> : null}
+        {node.codeRefs.length ? <span>{t("canvas.node.refs", { count: node.codeRefs.length })}</span> : null}
+        {taskCount ? <span>{t("canvas.node.tasks", { count: taskCount })}</span> : null}
+        {commentCount ? <span>{t("canvas.node.comments", { count: commentCount })}</span> : null}
         {diffState !== "normal" ? <strong>{diffState}</strong> : null}
       </div>
     </div>
   );
+}
+
+function pathKindLabel(kind: EdgePathKind, translate: ReturnType<typeof useI18n>["t"]): string {
+  switch (kind) {
+    case "smoothstep":
+      return translate("canvas.path.smoothstep");
+    case "straight":
+      return translate("canvas.path.straight");
+    case "bezier":
+      return translate("canvas.path.bezier");
+  }
+}
+
+function edgeArrowLabel(value: DiagramEdgeArrow, translate: ReturnType<typeof useI18n>["t"]): string {
+  switch (value) {
+    case "directed":
+      return translate("edgeArrow.directed");
+    case "bidirectional":
+      return translate("edgeArrow.bidirectional");
+    case "none":
+      return translate("edgeArrow.none");
+  }
 }
 
 function nodeDiffState(id: string, diff: DiagramDiffSummary | null): DiffState {

@@ -7,6 +7,7 @@ import {
 import { z } from "zod";
 
 export const NonEmptyStringSchema = z.string().min(1);
+export const OptionalStringSchema = z.string().optional();
 export const OptionalSlugSchema = z.string().min(1).optional();
 
 export const ImportMermaidInputSchema = z.object({
@@ -16,6 +17,24 @@ export const ImportMermaidInputSchema = z.object({
 });
 
 export const DiagramPatchOpsSchema = DiagramPatchOpSchema.array();
+export const OperationIndexesSchema = z.array(z.number().int().nonnegative()).optional();
+export const SaveDiagramInputSchema = z.object({
+  document: z.unknown(),
+  baseHash: z.string().min(1).nullable(),
+});
+export const ExportFileInputSchema = z.object({
+  defaultFileName: NonEmptyStringSchema,
+  content: z.string(),
+  encoding: z.enum(["utf8", "base64"]),
+  filters: z
+    .array(
+      z.object({
+        name: NonEmptyStringSchema,
+        extensions: z.array(NonEmptyStringSchema),
+      }),
+    )
+    .optional(),
+});
 
 export function parseIpcInput<T>(schema: z.ZodType<T>, value: unknown, label: string): T {
   const result = schema.safeParse(value);
@@ -34,6 +53,17 @@ export function parseDiagramDocument(value: unknown, label = "diagram"): Diagram
 
 export function parseDiagramPatchOps(value: unknown, label = "ops"): DiagramPatchOp[] {
   return parseIpcInput(DiagramPatchOpsSchema, value, label) as DiagramPatchOp[];
+}
+
+export function parseSaveDiagramInput(value: unknown): {
+  document: DiagramDocument;
+  baseHash: string | null;
+} {
+  const parsed = parseIpcInput(SaveDiagramInputSchema, value, "saveDiagram");
+  return {
+    document: parseDiagramDocument(parsed.document),
+    baseHash: parsed.baseHash,
+  };
 }
 
 export function safeErrorMessage(error: unknown): string {

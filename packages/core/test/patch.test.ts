@@ -3,8 +3,11 @@ import {
   applyPatch,
   addProposal,
   applyProposal,
+  applyProposalPartial,
   createSampleDiagram,
+  describeOp,
   previewPatch,
+  rejectProposal,
   type DiagramPatchOp,
 } from "../src/index.js";
 
@@ -120,5 +123,103 @@ describe("patch operations", () => {
       "accepted",
     );
     expect(applied.nodes.some((node) => node.id === "node.history")).toBe(true);
+    expect(applied.proposals.find((proposal) => proposal.id === "proposal.add-node")?.reviewedAt).toBeTruthy();
+  });
+
+  it("rejectProposal records review notes", () => {
+    const document = addProposal(createSampleDiagram(), {
+      id: "proposal.reject",
+      title: "Reject me",
+      summary: "Will be rejected.",
+      author: "agent",
+      ops: [],
+    });
+
+    const rejected = rejectProposal(document, "proposal.reject", "Needs evidence.");
+    const proposal = rejected.proposals.find((item) => item.id === "proposal.reject");
+    expect(proposal?.status).toBe("rejected");
+    expect(proposal?.reviewNote).toBe("Needs evidence.");
+    expect(proposal?.reviewedAt).toBeTruthy();
+  });
+
+  it("applyProposalPartial applies selected ops and records their indexes", () => {
+    const document = addProposal(createSampleDiagram(), {
+      id: "proposal.partial",
+      title: "Partial",
+      summary: "Adds two nodes.",
+      author: "agent",
+      ops: [
+        {
+          op: "add_node",
+          node: {
+            id: "node.partial_a",
+            type: "service",
+            label: "Partial A",
+            codeRefs: [],
+            tags: [],
+            metadata: {},
+          },
+        },
+        {
+          op: "add_node",
+          node: {
+            id: "node.partial_b",
+            type: "service",
+            label: "Partial B",
+            codeRefs: [],
+            tags: [],
+            metadata: {},
+          },
+        },
+      ],
+    });
+
+    const applied = applyProposalPartial(document, "proposal.partial", [1]);
+    const proposal = applied.proposals.find((item) => item.id === "proposal.partial");
+    expect(applied.nodes.some((node) => node.id === "node.partial_a")).toBe(false);
+    expect(applied.nodes.some((node) => node.id === "node.partial_b")).toBe(true);
+    expect(proposal?.status).toBe("partially_accepted");
+    expect(proposal?.appliedOpIndexes).toEqual([1]);
+    expect(proposal?.reviewedAt).toBeTruthy();
+  });
+
+  it("previewPatch reports dependency errors for partial op subsets", () => {
+    const document = createSampleDiagram();
+    const preview = previewPatch(document, [
+      {
+        op: "add_edge",
+        edge: {
+          id: "edge.partial",
+          from: "node.missing",
+          to: "node.client",
+          type: "sync",
+          arrow: "directed",
+          metadata: {},
+        },
+      },
+    ]);
+
+    expect(preview.validation.ok).toBe(false);
+    expect(preview.validation.errors.join("\n")).toContain("node not found");
+  });
+
+  it("describeOp returns human readable operation labels", () => {
+    const document = createSampleDiagram();
+    expect(
+      describeOp(
+        {
+          op: "add_node",
+          node: {
+            id: "node.described",
+            type: "service",
+            label: "Described Service",
+            codeRefs: [],
+            tags: [],
+            metadata: {},
+          },
+        },
+        document,
+      ),
+    ).toBe("Add node: Described Service");
   });
 });

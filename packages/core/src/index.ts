@@ -1,4 +1,5 @@
 export * from "./schema/diagram.js";
+export * from "./schema/migrate.js";
 export * from "./schema/patch.js";
 export * from "./mermaid/importMermaid.js";
 export * from "./mermaid/exportMermaid.js";
@@ -9,6 +10,10 @@ export * from "./patch/previewPatch.js";
 export * from "./patch/diff.js";
 export * from "./patch/sampleProposal.js";
 export * from "./layout/autoLayout.js";
+export * from "./sync/contentHash.js";
+export * from "./sync/mergeDiagram.js";
+export * from "./sync/checkedSave.js";
+export * from "./watch/diagramWatcher.js";
 export * from "./storage/workspace.js";
 export * from "./storage/atomicWrite.js";
 export * from "./repo/scanRepo.js";

@@ -1,8 +1,10 @@
 import { FolderOpen, PackagePlus, PlusCircle } from "lucide-react";
 import { useEffect } from "react";
+import { useI18n } from "../i18n";
 import { useWorkspaceStore } from "../state/workspace-store";
 
 export function WelcomeScreen() {
+  const { t } = useI18n();
   const openWorkspace = useWorkspaceStore((state) => state.openWorkspace);
   const createSampleWorkspace = useWorkspaceStore((state) => state.createSampleWorkspace);
   const createEmptyWorkspace = useWorkspaceStore((state) => state.createEmptyWorkspace);
@@ -21,24 +23,24 @@ export function WelcomeScreen() {
       <section className="welcome-panel">
         <div className="brand-mark">AC</div>
         <h1>AgentCanvas</h1>
-        <p>Local-first design canvas for diagrams, tasks, decisions, proposals, and code drift.</p>
+        <p>{t("welcome.subtitle")}</p>
         <div className="welcome-actions">
           <button onClick={() => void openWorkspace()} disabled={busy} type="button">
             <FolderOpen size={18} />
-            Open Folder
+            {t("welcome.openFolder")}
           </button>
           <button onClick={() => void createSampleWorkspace()} disabled={busy} type="button">
             <PackagePlus size={18} />
-            Create Sample
+            {t("welcome.createSample")}
           </button>
           <button onClick={() => void createEmptyWorkspace()} disabled={busy} type="button">
             <PlusCircle size={18} />
-            Empty Workspace
+            {t("welcome.emptyWorkspace")}
           </button>
         </div>
         {recentWorkspaces.length ? (
           <div className="recent-workspaces">
-            <strong>Recent workspaces</strong>
+            <strong>{t("welcome.recent")}</strong>
             {recentWorkspaces.map((workspace) => (
               <button
                 key={workspace.path}

@@ -17,6 +17,7 @@
     "sample": "tsx src/samples/writeSampleWorkspace.ts ../../examples/sample-workspace"
   },
   "dependencies": {
+    "chokidar": "^4.0.3",
     "nanoid": "^5.0.9",
     "zod": "^3.24.1"
   },

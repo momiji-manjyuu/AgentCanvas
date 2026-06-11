@@ -1,7 +1,9 @@
 import { Radar } from "lucide-react";
+import { useI18n } from "../i18n";
 import { useWorkspaceStore } from "../state/workspace-store";
 
 export function DriftPanel() {
+  const { t } = useI18n();
   const drift = useWorkspaceStore((state) => state.drift);
   const detectDrift = useWorkspaceStore((state) => state.detectDrift);
   const busy = useWorkspaceStore((state) => state.busy);
@@ -9,19 +11,19 @@ export function DriftPanel() {
   return (
     <section className="right-section drift-panel">
       <div className="right-section-title">
-        <strong>Drift</strong>
-        <button title="Detect drift" onClick={() => void detectDrift()} disabled={busy} type="button">
+        <strong>{t("drift.title")}</strong>
+        <button title={t("drift.detect")} onClick={() => void detectDrift()} disabled={busy} type="button">
           <Radar size={15} />
         </button>
       </div>
-      {!drift ? <p className="muted">No drift scan yet</p> : null}
+      {!drift ? <p className="muted">{t("drift.empty")}</p> : null}
       {drift ? (
         <>
           <div className="scan-summary">
-            <span>{drift.scan.files.length} files</span>
-            <span>{drift.scan.symbols.length} symbols</span>
-            <span>{drift.issues.length} issues</span>
-            <span>{drift.scan.warnings.length} warnings</span>
+            <span>{t("drift.files", { count: drift.scan.files.length })}</span>
+            <span>{t("drift.symbols", { count: drift.scan.symbols.length })}</span>
+            <span>{t("drift.issues", { count: drift.issues.length })}</span>
+            <span>{t("drift.warnings", { count: drift.scan.warnings.length })}</span>
           </div>
           {drift.scan.warnings.length ? (
             <div className="warning-block">

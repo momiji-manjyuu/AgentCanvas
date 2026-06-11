@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { app, dialog } from "electron";
@@ -7,12 +7,15 @@ import {
   addProposal,
   atomicWrite,
   applyProposal,
+  applyProposalPartial,
   autoLayout,
   createEmptyDiagram,
   createRedisCacheProposal,
   createSampleWorkspace,
+  computeContentHash,
   detectDrift,
   diagramIdFromSlug,
+  ensureWorkspace,
   exportMarkdown,
   exportMermaid,
   importMermaid,
@@ -20,8 +23,10 @@ import {
   loadDiagram,
   pathExists,
   previewPatch,
+  readDiagramFile,
   rejectProposal,
   resolveWorkspacePath,
+  saveDiagramChecked,
   saveDiagramBundle,
   slugify,
   uniqueDiagramId,
@@ -29,12 +34,14 @@ import {
   type DiagramDocument,
   type DiagramPatchOp,
   type DiagramProposal,
+  type PreservedFromDisk,
 } from "@agent-canvas/core";
 import {
   rememberRecentWorkspace,
   normalizeRecentWorkspaces,
   type RecentWorkspace,
 } from "./recent-workspaces.js";
+import { rememberSelfWrite, startDiagramWatcher } from "./diagram-watcher-bridge.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -43,6 +50,8 @@ export interface WorkspaceSnapshot {
   workspaceName: string;
   diagrams: Awaited<ReturnType<typeof listDiagrams>>;
   document: DiagramDocument | null;
+  contentHash: string | null;
+  preservedFromDisk?: PreservedFromDisk | null;
   gitStatus: GitStatusSummary;
   recentWorkspaces: RecentWorkspace[];
 }
@@ -51,6 +60,25 @@ export interface GitStatusSummary {
   ok: boolean;
   status: string[];
   message?: string;
+}
+
+export interface LoadedDiagram {
+  document: DiagramDocument;
+  contentHash: string;
+}
+
+export interface McpSetupInfo {
+  serverPath: string;
+  workspacePath: string;
+  claudeCommand: string;
+  jsonConfig: string;
+}
+
+export interface ExportFileInput {
+  defaultFileName: string;
+  content: string;
+  encoding: "utf8" | "base64";
+  filters?: Array<{ name: string; extensions: string[] }> | undefined;
 }
 
 let currentWorkspacePath: string | null = null;
@@ -87,25 +115,28 @@ export async function createSampleWorkspaceInDocuments(): Promise<WorkspaceSnaps
 export async function openWorkspace(workspacePath: string): Promise<WorkspaceSnapshot> {
   currentWorkspacePath = resolveWorkspacePath(workspacePath);
   await rememberWorkspace(currentWorkspacePath);
+  await ensureWorkspace(currentWorkspacePath);
+  await startDiagramWatcher(currentWorkspacePath);
   return workspaceSnapshot();
 }
 
 export async function workspaceSnapshot(): Promise<WorkspaceSnapshot> {
   const workspacePath = requireWorkspace();
   const diagrams = await listDiagrams(workspacePath);
-  const document = diagrams[0] ? await loadDiagram(workspacePath, diagrams[0].id) : null;
+  const loaded = diagrams[0] ? await loadDiagramWithHash(workspacePath, diagrams[0].id) : null;
   return {
     workspacePath,
     workspaceName: path.basename(workspacePath),
     diagrams,
-    document,
+    document: loaded?.document ?? null,
+    contentHash: loaded?.contentHash ?? null,
     gitStatus: await getGitStatus(workspacePath),
     recentWorkspaces: await getRecentWorkspaces(),
   };
 }
 
-export async function loadWorkspaceDiagram(diagramId: string): Promise<DiagramDocument> {
-  return loadDiagram(requireWorkspace(), diagramId);
+export async function loadWorkspaceDiagram(diagramId: string): Promise<LoadedDiagram> {
+  return loadDiagramWithHash(requireWorkspace(), diagramId);
 }
 
 export async function createWorkspaceDiagram(title: string): Promise<WorkspaceSnapshot> {
@@ -114,13 +145,20 @@ export async function createWorkspaceDiagram(title: string): Promise<WorkspaceSn
   return workspaceSnapshot();
 }
 
-export async function saveWorkspaceDiagram(document: DiagramDocument): Promise<WorkspaceSnapshot> {
+export async function saveWorkspaceDiagram(
+  document: DiagramDocument,
+  baseHash: string | null,
+): Promise<WorkspaceSnapshot> {
   const workspacePath = requireWorkspace();
-  await saveDiagramBundle(workspacePath, document);
+  const checked = await saveDiagramChecked(workspacePath, document, baseHash);
+  rememberSelfWrite(checked.result.diagramPath, checked.contentHash);
+  const savedDocument = await readDiagramFile(checked.result.diagramPath);
   const snapshot = await workspaceSnapshot();
   return {
     ...snapshot,
-    document,
+    document: savedDocument,
+    contentHash: checked.contentHash,
+    preservedFromDisk: checked.preservedFromDisk,
   };
 }
 
@@ -133,7 +171,8 @@ export async function importWorkspaceMermaid(input: {
   const slug = await uniqueDiagramSlug(workspacePath, input.slug ?? slugify(input.title));
   const id = await uniqueDiagramId(workspacePath, diagramIdFromSlug(slug));
   const document = importMermaid(input.source, { ...input, slug, id });
-  await saveDiagramBundle(workspacePath, document, slug);
+  const saved = await saveDiagramBundle(workspacePath, document, slug);
+  rememberSelfWrite(saved.diagramPath, computeContentHash(await readFile(saved.diagramPath, "utf8")));
   return {
     ...(await workspaceSnapshot()),
     document,
@@ -156,15 +195,20 @@ export async function previewWorkspacePatch(document: DiagramDocument, ops: Diag
 export async function applyWorkspaceProposal(
   document: DiagramDocument,
   proposalId: string,
+  opIndexes?: number[],
 ): Promise<DiagramDocument> {
+  if (opIndexes) {
+    return applyProposalPartial(document, proposalId, opIndexes);
+  }
   return applyProposal(document, proposalId);
 }
 
 export async function rejectWorkspaceProposal(
   document: DiagramDocument,
   proposalId: string,
+  reviewNote?: string,
 ): Promise<DiagramDocument> {
-  return rejectProposal(document, proposalId);
+  return rejectProposal(document, proposalId, reviewNote);
 }
 
 export async function detectWorkspaceDrift(document: DiagramDocument) {
@@ -177,6 +221,41 @@ export function exportWorkspaceMermaid(document: DiagramDocument): string {
 
 export function exportWorkspaceMarkdown(document: DiagramDocument): string {
   return exportMarkdown(document);
+}
+
+export async function exportFile(input: ExportFileInput): Promise<{ ok: boolean; filePath?: string }> {
+  const selected = await dialog.showSaveDialog({
+    defaultPath: input.defaultFileName,
+    ...(input.filters ? { filters: input.filters } : {}),
+  });
+  if (selected.canceled || !selected.filePath) {
+    return { ok: false };
+  }
+  await writeFile(selected.filePath, input.content, input.encoding);
+  return { ok: true, filePath: selected.filePath };
+}
+
+export function getMcpSetupInfo(): McpSetupInfo {
+  const workspacePath = requireWorkspace();
+  const serverPath = mcpServerPath();
+  const jsonConfig = JSON.stringify(
+    {
+      mcpServers: {
+        agentcanvas: {
+          command: "node",
+          args: [serverPath, "--workspace", workspacePath],
+        },
+      },
+    },
+    null,
+    2,
+  );
+  return {
+    serverPath,
+    workspacePath,
+    claudeCommand: `claude mcp add agentcanvas -- node ${quoteShellArg(serverPath)} --workspace ${quoteShellArg(workspacePath)}`,
+    jsonConfig,
+  };
 }
 
 export function proposalSummary(proposal: DiagramProposal): string {
@@ -214,6 +293,31 @@ async function rememberWorkspace(workspacePath: string): Promise<void> {
 
 function recentWorkspacesFile(): string {
   return path.join(app.getPath("userData"), "recent-workspaces.json");
+}
+
+function mcpServerPath(): string {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, "mcp-server", "bundle.cjs");
+  }
+  return path.resolve(app.getAppPath(), "..", "..", "packages", "mcp-server", "dist", "index.js");
+}
+
+function quoteShellArg(value: string): string {
+  return `"${value.replace(/"/g, '\\"')}"`;
+}
+
+async function loadDiagramWithHash(workspacePath: string, diagramId: string): Promise<LoadedDiagram> {
+  const diagrams = await listDiagrams(workspacePath);
+  const match = diagrams.find((diagram) => diagram.id === diagramId || diagram.slug === diagramId);
+  if (!match) {
+    throw new Error(`Diagram not found: ${diagramId}`);
+  }
+  const document = await loadDiagram(workspacePath, diagramId);
+  const raw = await readFile(match.path, "utf8");
+  return {
+    document,
+    contentHash: computeContentHash(raw),
+  };
 }
 
 async function getGitStatus(workspacePath: string): Promise<GitStatusSummary> {

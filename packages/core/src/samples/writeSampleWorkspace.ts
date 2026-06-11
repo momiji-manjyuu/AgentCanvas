@@ -1,9 +1,12 @@
+import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import { createSampleWorkspace } from "../storage/workspace.js";
+import { createSampleDiagram } from "./sampleDiagram.js";
+import { diagramsDir, saveDiagramBundle, withDiagramIdentity } from "../storage/workspace.js";
 
 const target = process.argv[2]
   ? path.resolve(process.cwd(), process.argv[2])
   : path.resolve(process.cwd(), "examples", "sample-workspace");
 
-await createSampleWorkspace(target);
+await mkdir(diagramsDir(target), { recursive: true });
+await saveDiagramBundle(target, withDiagramIdentity(createSampleDiagram(), "system-overview"), "system-overview");
 console.log(`Sample workspace written to ${target}`);

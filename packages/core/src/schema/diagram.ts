@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const SCHEMA_VERSION = "0.2.0" as const;
+
 export const DiagramDirectionSchema = z.enum(["LR", "TD", "TB", "RL", "BT"]);
 export const DiagramNodeTypeSchema = z.enum([
   "actor",
@@ -86,7 +88,9 @@ export const DiagramCommentSchema = z.object({
   id: z.string().min(1),
   text: z.string().min(1),
   targetId: z.string().min(1).optional(),
+  parentId: z.string().min(1).optional(),
   author: z.string().min(1),
+  authorKind: z.enum(["human", "agent"]).optional(),
   resolved: z.boolean(),
   createdAt: z.string().datetime(),
 });
@@ -188,11 +192,14 @@ export const DiagramProposalSchema = z.object({
   ops: z.array(DiagramPatchOpSchema),
   risks: z.array(z.string()).optional(),
   rationale: z.string().optional(),
+  reviewNote: z.string().optional(),
+  reviewedAt: z.string().datetime().optional(),
+  appliedOpIndexes: z.array(z.number().int().nonnegative()).optional(),
 });
 
 export const DiagramDocumentSchema = z
   .object({
-    schemaVersion: z.literal("0.1.0"),
+    schemaVersion: z.enum(["0.1.0", "0.2.0"]),
     id: z.string().min(1),
     title: z.string().min(1),
     description: z.string().optional(),
@@ -262,5 +269,3 @@ export type DiagramLayout = z.infer<typeof DiagramLayoutSchema>;
 export type DiagramPatchOp = z.infer<typeof DiagramPatchOpSchema>;
 export type DiagramProposal = z.infer<typeof DiagramProposalSchema>;
 export type DiagramDocument = z.infer<typeof DiagramDocumentSchema>;
-
-export const SCHEMA_VERSION = "0.1.0" as const;
