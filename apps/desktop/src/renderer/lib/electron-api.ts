@@ -39,6 +39,12 @@ export interface RecentWorkspace {
   lastOpenedAt: string;
 }
 
+export type AppLocale = "en" | "ja";
+
+export interface AppSettings {
+  locale: AppLocale | null;
+}
+
 export interface McpSetupInfo {
   serverPath: string;
   workspacePath: string;
@@ -95,6 +101,8 @@ export interface AgentCanvasApi {
   openWorkspacePath(workspacePath: string): Promise<WorkspaceSnapshot>;
   getRecentWorkspaces(): Promise<RecentWorkspace[]>;
   getMcpSetupInfo(): Promise<McpSetupInfo>;
+  getSettings(): Promise<AppSettings>;
+  setLocale(locale: AppLocale): Promise<AppSettings>;
   createEmptyWorkspace(): Promise<WorkspaceSnapshot | null>;
   createSampleWorkspace(): Promise<WorkspaceSnapshot>;
   loadDiagram(diagramId: string): Promise<LoadedDiagram>;
@@ -121,6 +129,7 @@ declare global {
 
 let fallbackDocument = createSampleDiagram();
 let fallbackContentHash = "browser-preview-0";
+let fallbackLocale: AppLocale | null = null;
 
 const fallbackApi: AgentCanvasApi = {
   async openWorkspace() {
@@ -151,6 +160,13 @@ const fallbackApi: AgentCanvasApi = {
         2,
       ),
     };
+  },
+  async getSettings() {
+    return { locale: fallbackLocale };
+  },
+  async setLocale(locale) {
+    fallbackLocale = locale;
+    return { locale };
   },
   async createEmptyWorkspace() {
     fallbackDocument = await createEmptyDiagramLike("Untitled Diagram");

@@ -16,6 +16,12 @@ export function Sidebar() {
   const createDiagram = useWorkspaceStore((state) => state.createDiagram);
   const loadMcpSetup = useWorkspaceStore((state) => state.loadMcpSetup);
   const [newTitle, setNewTitle] = useState("");
+  const saveLocale = (nextLocale: "ja" | "en") => {
+    void setLocale(nextLocale).catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      useWorkspaceStore.setState({ toast: message, lastError: message });
+    });
+  };
 
   useEffect(() => {
     if (workspacePath) {
@@ -123,10 +129,10 @@ export function Sidebar() {
       <section className="rail-section">
         <div className="section-title">{t("sidebar.language")}</div>
         <div className="language-toggle">
-          <button className={locale === "ja" ? "active" : ""} onClick={() => setLocale("ja")} type="button">
+          <button className={locale === "ja" ? "active" : ""} onClick={() => saveLocale("ja")} type="button">
             日本語
           </button>
-          <button className={locale === "en" ? "active" : ""} onClick={() => setLocale("en")} type="button">
+          <button className={locale === "en" ? "active" : ""} onClick={() => saveLocale("en")} type="button">
             English
           </button>
         </div>

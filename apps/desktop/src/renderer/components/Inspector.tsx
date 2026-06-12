@@ -299,13 +299,17 @@ function CommentThread(props: {
     <div className="comment-thread">
       <button className="mini-row" onClick={() => props.resolveComment(props.root.id)} type="button">
         <span>{props.root.resolved ? t("common.resolved") : t("common.open")}</span>
-        <strong>{t(authorKind === "agent" ? "comment.agent" : "comment.human")}</strong>
+        <strong className={`comment-author comment-author-${authorKind}`}>
+          {t(authorKind === "agent" ? "comment.agent" : "comment.human")}
+        </strong>
         {props.root.text}
       </button>
       {props.replies.map((reply) => (
         <button className="mini-row reply" key={reply.id} onClick={() => props.resolveComment(reply.id)} type="button">
           <span>{reply.resolved ? t("common.resolved") : t("common.open")}</span>
-          <strong>{t((reply.authorKind ?? (reply.author === "agent" ? "agent" : "human")) === "agent" ? "comment.agent" : "comment.human")}</strong>
+          <strong className={`comment-author comment-author-${commentAuthorKind(reply)}`}>
+            {t(commentAuthorKind(reply) === "agent" ? "comment.agent" : "comment.human")}
+          </strong>
           {reply.text}
         </button>
       ))}
@@ -324,6 +328,10 @@ function CommentThread(props: {
       </div>
     </div>
   );
+}
+
+function commentAuthorKind(comment: DiagramComment): "agent" | "human" {
+  return comment.authorKind ?? (comment.author === "agent" ? "agent" : "human");
 }
 
 function buildCommentThreads(comments: DiagramComment[]): CommentThreadData[] {

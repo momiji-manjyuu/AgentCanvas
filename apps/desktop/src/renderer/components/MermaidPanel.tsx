@@ -9,10 +9,11 @@ export function MermaidPanel() {
   const document = useWorkspaceStore((state) => state.document);
   const importMermaid = useWorkspaceStore((state) => state.importMermaid);
   const busy = useWorkspaceStore((state) => state.busy);
-  const [title, setTitle] = useState(() => t("mermaid.importedTitle"));
+  const [title, setTitle] = useState("");
   const [source, setSource] = useState("flowchart LR\n  client[\"Client\"] --> api[\"API\"]\n");
   const mermaid = useMemo(() => (document ? exportMermaid(document) : ""), [document]);
   const markdown = useMemo(() => (document ? exportMarkdown(document) : ""), [document]);
+  const importedTitle = t("mermaid.importedTitle");
   const unsupported = document?.metadata.unsupportedMermaidLines;
   const unsupportedLines = Array.isArray(unsupported) ? unsupported.filter((line) => typeof line === "string") : [];
 
@@ -41,9 +42,9 @@ export function MermaidPanel() {
         </div>
       ) : null}
       <div className="import-box">
-        <input value={title} onChange={(event) => setTitle(event.target.value)} />
+        <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder={importedTitle} />
         <textarea value={source} onChange={(event) => setSource(event.target.value)} />
-        <button onClick={() => void importMermaid(title, source)} disabled={busy} type="button">
+        <button onClick={() => void importMermaid(title.trim() || importedTitle, source)} disabled={busy} type="button">
           <Upload size={15} />
           {t("mermaid.import")}
         </button>

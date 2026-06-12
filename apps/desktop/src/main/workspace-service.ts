@@ -41,6 +41,12 @@ import {
   normalizeRecentWorkspaces,
   type RecentWorkspace,
 } from "./recent-workspaces.js";
+import {
+  readSettings,
+  saveLocaleSetting,
+  type AppLocale,
+  type AppSettings,
+} from "./settings.js";
 import { rememberSelfWrite, startDiagramWatcher } from "./diagram-watcher-bridge.js";
 
 const execFileAsync = promisify(execFile);
@@ -283,6 +289,14 @@ export async function getRecentWorkspaces(): Promise<RecentWorkspace[]> {
   return existing;
 }
 
+export async function getSettings(): Promise<AppSettings> {
+  return readSettings(settingsFile());
+}
+
+export async function saveLocale(locale: AppLocale): Promise<AppSettings> {
+  return saveLocaleSetting(settingsFile(), locale);
+}
+
 async function rememberWorkspace(workspacePath: string): Promise<void> {
   const filePath = recentWorkspacesFile();
   const existing = await getRecentWorkspaces();
@@ -293,6 +307,10 @@ async function rememberWorkspace(workspacePath: string): Promise<void> {
 
 function recentWorkspacesFile(): string {
   return path.join(app.getPath("userData"), "recent-workspaces.json");
+}
+
+function settingsFile(): string {
+  return path.join(app.getPath("userData"), "settings.json");
 }
 
 function mcpServerPath(): string {

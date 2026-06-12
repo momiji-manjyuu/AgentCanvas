@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
 import { en } from "./en";
 import { ja } from "./ja";
+import { getAgentCanvasApi, type AppLocale } from "../lib/electron-api";
 
-type Locale = "en" | "ja";
+export type Locale = AppLocale;
 type MessageKey = keyof typeof en;
 type Dictionary = Record<MessageKey, string>;
 type Params = Record<string, string | number>;
 
 const dictionaries: Record<Locale, Dictionary> = { en, ja };
 const listeners = new Set<() => void>();
-let currentLocale: Locale = initialLocale();
+let currentLocale: Locale = localeFromNavigator();
 
 export function t(key: MessageKey, params: Params = {}): string {
   const template: string = dictionaries[currentLocale][key] ?? dictionaries.en[key] ?? key;
@@ -23,9 +24,22 @@ export function getLocale(): Locale {
   return currentLocale;
 }
 
-export function setLocale(locale: Locale): void {
+export async function initializeLocale(): Promise<void> {
+  try {
+    const settings = await getAgentCanvasApi().getSettings();
+    applyLocale(settings.locale ?? localeFromNavigator());
+  } catch {
+    applyLocale(localeFromNavigator());
+  }
+}
+
+export async function setLocale(locale: Locale): Promise<void> {
+  applyLocale(locale);
+  await getAgentCanvasApi().setLocale(locale);
+}
+
+function applyLocale(locale: Locale): void {
   currentLocale = locale;
-  window.localStorage.setItem("agentcanvas.locale", locale);
   for (const listener of listeners) {
     listener();
   }
@@ -33,7 +47,7 @@ export function setLocale(locale: Locale): void {
 
 export function useI18n(): {
   locale: Locale;
-  setLocale: (locale: Locale) => void;
+  setLocale: (locale: Locale) => Promise<void>;
   t: typeof t;
 } {
   const [locale, setLocaleState] = useState(currentLocale);
@@ -47,10 +61,6 @@ export function useI18n(): {
   return { locale, setLocale, t };
 }
 
-function initialLocale(): Locale {
-  const saved = window.localStorage.getItem("agentcanvas.locale");
-  if (saved === "en" || saved === "ja") {
-    return saved;
-  }
+function localeFromNavigator(): Locale {
   return navigator.language.toLowerCase().startsWith("ja") ? "ja" : "en";
 }

@@ -815,6 +815,21 @@ code {
   text-transform: uppercase;
 }
 
+.mini-row .comment-author {
+  border-radius: 5px;
+  padding: 2px 6px;
+}
+
+.mini-row .comment-author-human {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.mini-row .comment-author-agent {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
 .drift-list {
   display: grid;
   gap: 7px;

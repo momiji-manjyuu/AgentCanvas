@@ -13,16 +13,19 @@ import {
   exportWorkspaceMermaid,
   getMcpSetupInfo,
   getRecentWorkspaces,
+  getSettings,
   importWorkspaceMermaid,
   loadWorkspaceDiagram,
   openWorkspace,
   previewWorkspacePatch,
   rejectWorkspaceProposal,
+  saveLocale,
   saveWorkspaceDiagram,
 } from "./workspace-service.js";
 import {
   ImportMermaidInputSchema,
   ExportFileInputSchema,
+  LocaleSchema,
   NonEmptyStringSchema,
   OperationIndexesSchema,
   OptionalStringSchema,
@@ -42,6 +45,10 @@ export function registerIpc(): void {
   ipcMain.handle("workspace:create-sample", () => createSampleWorkspaceInDocuments());
   ipcMain.handle("workspace:recent", () => safeInvoke(() => getRecentWorkspaces()));
   ipcMain.handle("workspace:mcp-setup", () => safeInvoke(() => getMcpSetupInfo()));
+  ipcMain.handle("settings:get", () => safeInvoke(() => getSettings()));
+  ipcMain.handle("settings:set-locale", (_event, locale: unknown) =>
+    safeInvoke(() => saveLocale(parseIpcInput(LocaleSchema, locale, "locale"))),
+  );
   ipcMain.handle("diagram:load", (_event, diagramId: unknown) =>
     safeInvoke(() => loadWorkspaceDiagram(parseIpcInput(NonEmptyStringSchema, diagramId, "diagramId"))),
   );

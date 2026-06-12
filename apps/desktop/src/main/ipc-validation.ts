@@ -9,6 +9,7 @@ import { z } from "zod";
 export const NonEmptyStringSchema = z.string().min(1);
 export const OptionalStringSchema = z.string().optional();
 export const OptionalSlugSchema = z.string().min(1).optional();
+export const LocaleSchema = z.enum(["en", "ja"]);
 
 export const ImportMermaidInputSchema = z.object({
   title: NonEmptyStringSchema,

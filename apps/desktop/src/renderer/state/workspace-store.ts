@@ -701,7 +701,7 @@ function applySnapshot(
   snapshot: WorkspaceSnapshot,
   documentOverride?: DiagramDocument,
 ): void {
-  set({
+  set((state) => ({
     workspacePath: snapshot.workspacePath,
     workspaceName: snapshot.workspaceName,
     diagrams: snapshot.diagrams,
@@ -709,7 +709,7 @@ function applySnapshot(
     baseHash: snapshot.contentHash,
     gitStatus: snapshot.gitStatus,
     recentWorkspaces: snapshot.recentWorkspaces,
-    mcpSetup: null,
+    mcpSetup: state.workspacePath === snapshot.workspacePath ? state.mcpSetup : null,
     selection: null,
     preview: null,
     activeProposalId: null,
@@ -717,7 +717,7 @@ function applySnapshot(
     future: [],
     dirty: false,
     lastError: null,
-  });
+  }));
 }
 
 function addActivity(set: StoreSet, input: ActivityInput): void {

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { parseDiagramPatchOps, parseIpcInput, NonEmptyStringSchema } from "../src/main/ipc-validation.js";
+import {
+  LocaleSchema,
+  NonEmptyStringSchema,
+  parseDiagramPatchOps,
+  parseIpcInput,
+} from "../src/main/ipc-validation.js";
 
 describe("IPC validation", () => {
   it("rejects empty strings", () => {
@@ -10,5 +15,9 @@ describe("IPC validation", () => {
     expect(() => parseDiagramPatchOps([{ op: "add_node", node: { id: "node.bad" } }])).toThrow(
       /Invalid ops/,
     );
+  });
+
+  it("rejects invalid locale values", () => {
+    expect(() => parseIpcInput(LocaleSchema, "fr", "locale")).toThrow(/Invalid locale/);
   });
 });
