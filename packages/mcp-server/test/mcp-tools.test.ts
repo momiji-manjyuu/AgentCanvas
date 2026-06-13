@@ -134,7 +134,66 @@ describe("MCP tool handlers", () => {
     })) as { ok: boolean; applied: boolean; errors: string[] };
     expect(result.ok).toBe(false);
     expect(result.applied).toBe(false);
-    expect(result.errors.join("\n")).toContain("アプリで承認してください");
+    expect(result.errors.join("\n")).toContain("Please approve it in the AgentCanvas app");
+  });
+
+  it("diagram_reject_proposal persists the reason", async () => {
+    const workspace = await sampleWorkspace();
+    const tools = createAgentCanvasTools(workspace);
+    const proposed = (await tools.diagram_propose_patch({
+      diagramId: "diagram.system_overview",
+      title: "Add Search",
+      summary: "Adds a search service.",
+      ops: [
+        {
+          op: "add_node",
+          node: {
+            id: "node.search",
+            type: "service",
+            label: "Search Service",
+            codeRefs: [],
+            tags: [],
+            metadata: {},
+          },
+        },
+      ],
+    })) as { proposal: { id: string } };
+
+    await tools.diagram_reject_proposal({
+      diagramId: "diagram.system_overview",
+      proposalId: proposed.proposal.id,
+      reason: "Needs a rollout plan.",
+    });
+    const fetched = (await tools.diagram_fetch({ diagramId: "diagram.system_overview" })) as {
+      diagram: { proposals: Array<{ id: string; reviewNote?: string; reviewedAt?: string; status: string }> };
+    };
+    const proposal = fetched.diagram.proposals.find((item) => item.id === proposed.proposal.id);
+
+    expect(proposal?.status).toBe("rejected");
+    expect(proposal?.reviewNote).toBe("Needs a rollout plan.");
+    expect(proposal?.reviewedAt).toBeTruthy();
+  });
+
+  it("diagram_add_comment saves agent comments and replies", async () => {
+    const workspace = await sampleWorkspace();
+    const tools = createAgentCanvasTools(workspace);
+    const root = (await tools.diagram_add_comment({
+      diagramId: "diagram.system_overview",
+      text: "Please verify cache behavior.",
+      targetId: "node.redis_cache",
+    })) as { comment: { id: string } };
+    const reply = (await tools.diagram_add_comment({
+      diagramId: "diagram.system_overview",
+      text: "Reply from agent.",
+      targetId: "node.redis_cache",
+      parentId: root.comment.id,
+    })) as { comment: { parentId?: string; authorKind?: string } };
+
+    const diagram = await loadDiagram(workspace, "diagram.system_overview");
+    expect(diagram.comments).toHaveLength(2);
+    expect(diagram.comments[0]?.authorKind).toBe("agent");
+    expect(reply.comment.parentId).toBe(root.comment.id);
+    expect(reply.comment.authorKind).toBe("agent");
   });
 
   it("diagram_apply_proposal applies when the env flag is enabled", async () => {

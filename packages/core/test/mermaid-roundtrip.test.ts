@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { exportMermaid, importMermaid, type DiagramDocument } from "../src/index.js";
+import { SCHEMA_VERSION, exportMermaid, importMermaid, type DiagramDocument } from "../src/index.js";
 
 const SOURCE = `flowchart LR
   subgraph backend["Backend"]
@@ -48,7 +48,7 @@ describe("Mermaid import/export", () => {
   it("preserves unsafe IR ids and dependent metadata through AgentCanvas export comments", () => {
     const now = new Date().toISOString();
     const document: DiagramDocument = {
-      schemaVersion: "0.1.0",
+      schemaVersion: SCHEMA_VERSION,
       id: "diagram.roundtrip",
       title: "Roundtrip",
       createdAt: now,
@@ -77,6 +77,17 @@ describe("Mermaid import/export", () => {
           id: "comment.api",
           text: "Looks good",
           author: "agent",
+          authorKind: "agent",
+          resolved: false,
+          createdAt: now,
+          targetId: "node.api_gateway",
+        },
+        {
+          id: "comment.reply",
+          text: "Human reply",
+          author: "human",
+          authorKind: "human",
+          parentId: "comment.api",
           resolved: false,
           createdAt: now,
           targetId: "node.api_gateway",
@@ -91,7 +102,20 @@ describe("Mermaid import/export", () => {
         edges: {},
         viewport: { x: 1, y: 2, zoom: 1.2 },
       },
-      proposals: [],
+      proposals: [
+        {
+          id: "proposal.reviewed",
+          title: "Reviewed change",
+          summary: "Already reviewed.",
+          createdAt: now,
+          author: "agent",
+          status: "rejected",
+          ops: [],
+          reviewNote: "Needs more detail.",
+          reviewedAt: now,
+          appliedOpIndexes: [0],
+        },
+      ],
       metadata: { slug: "roundtrip" },
     };
 
@@ -105,6 +129,11 @@ describe("Mermaid import/export", () => {
     expect(imported.notes[0]?.targetId).toBe("node.api_gateway");
     expect(imported.tasks[0]?.targetId).toBe("node.api_gateway");
     expect(imported.comments[0]?.targetId).toBe("node.api_gateway");
+    expect(imported.comments[1]?.parentId).toBe("comment.api");
+    expect(imported.comments[1]?.authorKind).toBe("human");
+    expect(imported.proposals[0]?.reviewNote).toBe("Needs more detail.");
+    expect(imported.proposals[0]?.reviewedAt).toBe(now);
+    expect(imported.proposals[0]?.appliedOpIndexes).toEqual([0]);
     expect(Object.keys(imported.layout.nodes).sort()).toEqual(Object.keys(document.layout.nodes).sort());
   });
 

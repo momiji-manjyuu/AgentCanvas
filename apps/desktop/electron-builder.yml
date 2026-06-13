@@ -5,6 +5,9 @@ directories:
 files:
   - dist/**
   - package.json
+extraResources:
+  - from: ../../packages/mcp-server/dist/bundle.cjs
+    to: mcp-server/bundle.cjs
 asar: true
 mac:
   category: public.app-category.developer-tools

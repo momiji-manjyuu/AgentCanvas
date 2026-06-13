@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "0.1.0",
+  "id": "diagram.legacy",
+  "title": "Legacy Diagram",
+  "description": "A v0.1 fixture used to verify migrations.",
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "updatedAt": "2026-01-01T00:00:00.000Z",
+  "direction": "LR",
+  "nodes": [
+    {
+      "id": "node.api",
+      "type": "service",
+      "label": "API",
+      "codeRefs": [],
+      "tags": [],
+      "metadata": {}
+    }
+  ],
+  "edges": [],
+  "groups": [],
+  "notes": [],
+  "tasks": [],
+  "comments": [
+    {
+      "id": "comment.agent",
+      "text": "Legacy agent comment",
+      "targetId": "node.api",
+      "author": "agent",
+      "resolved": false,
+      "createdAt": "2026-01-01T00:00:00.000Z"
+    }
+  ],
+  "layout": {
+    "nodes": {
+      "node.api": {
+        "x": 0,
+        "y": 0,
+        "width": 190,
+        "height": 76
+      }
+    },
+    "edges": {},
+    "viewport": {
+      "x": 0,
+      "y": 0,
+      "zoom": 1
+    }
+  },
+  "proposals": [],
+  "metadata": {
+    "slug": "legacy-diagram"
+  }
+}

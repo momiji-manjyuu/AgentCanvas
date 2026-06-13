@@ -3,12 +3,12 @@ import path from "node:path";
 import { exportMarkdown } from "../mermaid/exportMarkdown.js";
 import { exportMermaid } from "../mermaid/exportMermaid.js";
 import { createSampleDiagram } from "../samples/sampleDiagram.js";
-import {
-  DiagramDocumentSchema,
-  SCHEMA_VERSION,
-  type DiagramDocument,
-} from "../schema/diagram.js";
+import { SCHEMA_VERSION, type DiagramDocument } from "../schema/diagram.js";
+import { migrateDiagram } from "../schema/migrate.js";
+import { diagramFileContent } from "../sync/contentHash.js";
 import { atomicWrite } from "./atomicWrite.js";
+
+export { stableJson } from "./stableJson.js";
 
 export interface DiagramListItem {
   id: string;
@@ -107,13 +107,13 @@ export async function saveDiagramBundle(
   const directory = diagramsDir(root);
   await mkdir(directory, { recursive: true });
 
-  const validated = DiagramDocumentSchema.parse(document);
+  const validated = migrateDiagram(document);
   const safeSlug = slugify(slug);
   const diagramPath = ensureWithinWorkspace(root, path.join("design", "diagrams", `${safeSlug}.diagram.json`));
   const mermaidPath = ensureWithinWorkspace(root, path.join("design", "diagrams", `${safeSlug}.mmd`));
   const markdownPath = ensureWithinWorkspace(root, path.join("design", "diagrams", `${safeSlug}.md`));
 
-  await atomicWrite(diagramPath, `${stableJson(validated)}\n`);
+  await atomicWrite(diagramPath, diagramFileContent(validated));
   await atomicWrite(mermaidPath, exportMermaid(validated));
   await atomicWrite(markdownPath, exportMarkdown(validated));
 
@@ -156,7 +156,7 @@ export async function createSampleWorkspace(workspacePath: string): Promise<Diag
 
 export async function readDiagramFile(filePath: string): Promise<DiagramDocument> {
   const raw = await readFile(filePath, "utf8");
-  return DiagramDocumentSchema.parse(JSON.parse(raw));
+  return migrateDiagram(JSON.parse(raw));
 }
 
 export async function pathExists(filePath: string): Promise<boolean> {
@@ -180,10 +180,6 @@ export function slugify(value: string): string {
       .replace(/^-+|-+$/g, "")
       .slice(0, 80) || "diagram"
   );
-}
-
-export function stableJson(value: unknown): string {
-  return JSON.stringify(sortForJson(value), null, 2);
 }
 
 export async function uniqueDiagramSlug(workspacePath: string, baseSlug: string): Promise<string> {
@@ -225,7 +221,7 @@ export function withDiagramIdentity(
   slug: string,
   id = diagramIdFromSlug(slug),
 ): DiagramDocument {
-  return DiagramDocumentSchema.parse({
+  return migrateDiagram({
     ...document,
     id,
     metadata: { ...document.metadata, slug },
@@ -235,20 +231,6 @@ export function withDiagramIdentity(
 function slugFromDocument(document: DiagramDocument): string {
   const metadataSlug = document.metadata.slug;
   return typeof metadataSlug === "string" ? metadataSlug : slugify(document.title);
-}
-
-function sortForJson(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map(sortForJson);
-  }
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([key, item]) => [key, sortForJson(item)]),
-    );
-  }
-  return value;
 }
 
 function isNotFound(error: unknown): boolean {

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { ActivityPanel } from "./components/ActivityPanel";
 import { CanvasView } from "./components/CanvasView";
 import { DriftPanel } from "./components/DriftPanel";
 import { Inspector } from "./components/Inspector";
@@ -7,10 +8,12 @@ import { ProposalPanel } from "./components/ProposalPanel";
 import { Sidebar } from "./components/Sidebar";
 import { Toolbar } from "./components/Toolbar";
 import { WelcomeScreen } from "./components/WelcomeScreen";
+import { useI18n } from "./i18n";
 import { isAgentCanvasBridgeUnavailable } from "./lib/electron-api";
 import { useWorkspaceStore } from "./state/workspace-store";
 
 export default function App() {
+  const { t } = useI18n();
   const document = useWorkspaceStore((state) => state.document);
   const toast = useWorkspaceStore((state) => state.toast);
   const dismissToast = useWorkspaceStore((state) => state.dismissToast);
@@ -51,8 +54,8 @@ export default function App() {
       <div className="welcome-screen">
         <section className="welcome-panel error-panel">
           <div className="brand-mark">AC</div>
-          <h1>Preload/IPC is not initialized</h1>
-          <p>The desktop bridge is unavailable, so workspace file operations are disabled.</p>
+          <h1>{t("app.bridgeTitle")}</h1>
+          <p>{t("app.bridgeBody")}</p>
         </section>
       </div>
     );
@@ -70,6 +73,7 @@ export default function App() {
         <CanvasView />
       </main>
       <aside className="right-rail">
+        <ActivityPanel />
         <Inspector />
         <MermaidPanel />
         <ProposalPanel />

@@ -1,10 +1,11 @@
 {
   "comments": [],
-  "createdAt": "2026-05-30T01:51:07.265Z",
+  "createdAt": "2026-06-11T15:22:47.022Z",
   "description": "A sample local-first web service architecture used to explore AgentCanvas.",
   "direction": "LR",
   "edges": [
     {
+      "arrow": "directed",
       "from": "node.client",
       "id": "edge.client.web_app",
       "metadata": {},
@@ -12,6 +13,7 @@
       "type": "sync"
     },
     {
+      "arrow": "directed",
       "from": "node.web_app",
       "id": "edge.web_app.api_gateway",
       "metadata": {},
@@ -19,6 +21,7 @@
       "type": "sync"
     },
     {
+      "arrow": "directed",
       "from": "node.api_gateway",
       "id": "edge.api_gateway.auth_service",
       "metadata": {},
@@ -26,6 +29,7 @@
       "type": "sync"
     },
     {
+      "arrow": "directed",
       "from": "node.api_gateway",
       "id": "edge.api_gateway.user_service",
       "metadata": {},
@@ -33,6 +37,7 @@
       "type": "sync"
     },
     {
+      "arrow": "directed",
       "from": "node.user_service",
       "id": "edge.user_service.redis_cache",
       "metadata": {},
@@ -40,6 +45,7 @@
       "type": "sync"
     },
     {
+      "arrow": "directed",
       "from": "node.user_service",
       "id": "edge.user_service.postgresql",
       "metadata": {},
@@ -47,6 +53,7 @@
       "type": "sync"
     },
     {
+      "arrow": "directed",
       "from": "node.user_service",
       "id": "edge.user_service.job_queue",
       "metadata": {},
@@ -54,6 +61,7 @@
       "type": "sync"
     },
     {
+      "arrow": "directed",
       "from": "node.job_queue",
       "id": "edge.job_queue.worker",
       "metadata": {},
@@ -61,6 +69,7 @@
       "type": "sync"
     },
     {
+      "arrow": "directed",
       "from": "node.worker",
       "id": "edge.worker.payment_api",
       "metadata": {},
@@ -256,7 +265,7 @@
     }
   ],
   "proposals": [],
-  "schemaVersion": "0.1.0",
+  "schemaVersion": "0.2.0",
   "tasks": [
     {
       "id": "task.auth_coderef",
@@ -278,5 +287,5 @@
     }
   ],
   "title": "System Overview",
-  "updatedAt": "2026-05-30T01:51:07.265Z"
+  "updatedAt": "2026-06-11T15:22:47.022Z"
 }

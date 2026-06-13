@@ -7,12 +7,17 @@ import {
   type DiagramPatchOp,
   type DriftResult,
   type PatchPreviewResult,
+  type PreservedFromDisk,
+  mergeExternalChanges,
 } from "@agent-canvas/core";
+import { t } from "../i18n";
 import {
   applyLocalPatch,
   getAgentCanvasApi,
   type DiagramListItem,
+  type ExternalDiagramChange,
   type GitStatusSummary,
+  type McpSetupInfo,
   type RecentWorkspace,
   type WorkspaceSnapshot,
 } from "../lib/electron-api";
@@ -24,19 +29,31 @@ export type Selection =
   | { kind: "task"; id: string }
   | { kind: "comment"; id: string };
 
+export interface ActivityItem {
+  id: string;
+  at: string;
+  kind: "proposal" | "comment" | "diagram" | "save" | "decision" | "warning";
+  message: string;
+  diagramId?: string;
+  proposalId?: string;
+}
+
 interface WorkspaceState {
   workspacePath: string | null;
   workspaceName: string | null;
   diagrams: DiagramListItem[];
   document: DiagramDocument | null;
+  baseHash: string | null;
   gitStatus: GitStatusSummary | null;
   recentWorkspaces: RecentWorkspace[];
+  mcpSetup: McpSetupInfo | null;
   selection: Selection | null;
   preview: PatchPreviewResult | null;
   activeProposalId: string | null;
   drift: DriftResult | null;
   toast: string | null;
   lastError: string | null;
+  activity: ActivityItem[];
   busy: boolean;
   dirty: boolean;
   past: DiagramDocument[];
@@ -44,18 +61,22 @@ interface WorkspaceState {
   openWorkspace(): Promise<void>;
   openRecentWorkspace(workspacePath: string): Promise<void>;
   loadRecentWorkspaces(): Promise<void>;
+  loadMcpSetup(): Promise<void>;
   createSampleWorkspace(): Promise<void>;
   createEmptyWorkspace(): Promise<void>;
   loadDiagram(diagramId: string): Promise<void>;
+  reloadDiagram(): Promise<void>;
+  handleExternalChange(event: ExternalDiagramChange): void;
   createDiagram(title: string): Promise<void>;
   save(): Promise<void>;
   importMermaid(title: string, source: string): Promise<void>;
   autoLayout(): Promise<void>;
   createSampleProposal(): Promise<void>;
-  previewProposal(proposalId: string): Promise<void>;
+  previewProposal(proposalId: string, opIndexes?: number[]): Promise<void>;
   clearPreview(): void;
-  acceptProposal(proposalId: string): Promise<void>;
-  rejectProposal(proposalId: string): Promise<void>;
+  activateProposal(proposalId: string): void;
+  acceptProposal(proposalId: string, opIndexes?: number[]): Promise<void>;
+  rejectProposal(proposalId: string, reviewNote?: string): Promise<void>;
   detectDrift(): Promise<void>;
   select(selection: Selection | null): void;
   addNode(type?: DiagramNodeType, position?: { x: number; y: number }): void;
@@ -72,7 +93,7 @@ interface WorkspaceState {
   addTask(targetId: string | undefined, title: string): void;
   updateTask(id: string, updates: Partial<DiagramDocument["tasks"][number]>): void;
   addNote(targetId: string | undefined, text: string): void;
-  addComment(targetId: string | undefined, text: string): void;
+  addComment(targetId: string | undefined, text: string, parentId?: string): void;
   resolveComment(id: string): void;
   undo(): void;
   redo(): void;
@@ -83,6 +104,10 @@ type StoreSet = (
   partial: Partial<WorkspaceState> | ((state: WorkspaceState) => Partial<WorkspaceState>),
 ) => void;
 type StoreGet = () => WorkspaceState;
+type ActivityInput = Omit<ActivityItem, "id" | "at" | "diagramId" | "proposalId"> & {
+  diagramId?: string | undefined;
+  proposalId?: string | undefined;
+};
 
 const api = getAgentCanvasApi();
 
@@ -91,14 +116,17 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   workspaceName: null,
   diagrams: [],
   document: null,
+  baseHash: null,
   gitStatus: null,
   recentWorkspaces: [],
+  mcpSetup: null,
   selection: null,
   preview: null,
   activeProposalId: null,
   drift: null,
   toast: null,
   lastError: null,
+  activity: [],
   busy: false,
   dirty: false,
   past: [],
@@ -125,6 +153,14 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }
   },
 
+  async loadMcpSetup() {
+    try {
+      set({ mcpSetup: await api.getMcpSetupInfo() });
+    } catch {
+      set({ mcpSetup: null });
+    }
+  },
+
   async createSampleWorkspace() {
     await run(set, async () => applySnapshot(set, await api.createSampleWorkspace()));
   },
@@ -140,15 +176,105 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
   async loadDiagram(diagramId: string) {
     await run(set, async () => {
-      const document = await api.loadDiagram(diagramId);
+      const loaded = await api.loadDiagram(diagramId);
       set({
-        document,
+        document: loaded.document,
+        baseHash: loaded.contentHash,
         selection: null,
         preview: null,
         activeProposalId: null,
         past: [],
         future: [],
+        dirty: false,
       });
+    });
+  },
+
+  async reloadDiagram() {
+    const { document, dirty } = get();
+    if (!document) {
+      return;
+    }
+    if (dirty && !window.confirm(t("dialog.reloadDirty"))) {
+      return;
+    }
+    await run(set, async () => {
+      const loaded = await api.loadDiagram(document.id);
+      set({
+        document: loaded.document,
+        baseHash: loaded.contentHash,
+        selection: null,
+        preview: null,
+        activeProposalId: null,
+        past: [],
+        future: [],
+        dirty: false,
+        toast: t("toast.reload"),
+      });
+    });
+  },
+
+  handleExternalChange(event) {
+    const state = get();
+    if (event.kind === "invalid") {
+      set({ toast: t("toast.externalInvalid", { slug: event.slug }), lastError: event.error });
+      addActivity(set, {
+        kind: "warning",
+        message: t("toast.externalInvalidActivity", { slug: event.slug }),
+        diagramId: event.slug,
+      });
+      return;
+    }
+
+    if (event.kind === "removed") {
+      set((current) => ({
+        diagrams: current.diagrams.filter((diagram) => diagram.slug !== event.slug && diagram.path !== event.path),
+        toast: current.document?.metadata.slug === event.slug ? t("activity.diagramRemoved", { slug: event.slug }) : current.toast,
+      }));
+      addActivity(set, {
+        kind: "diagram",
+        message: t("activity.diagramRemoved", { slug: event.slug }),
+        diagramId: event.slug,
+      });
+      return;
+    }
+
+    addExternalChangeActivity(set, state.document, event);
+    set((current) => ({
+      diagrams: upsertDiagramListItem(current.diagrams, event),
+    }));
+
+    const currentDocument = state.document;
+    if (!currentDocument || !isCurrentDiagram(currentDocument, event)) {
+      return;
+    }
+
+    if (!state.dirty) {
+      set({
+        document: event.document,
+        baseHash: event.contentHash,
+        selection: selectionExists(event.document, state.selection) ? state.selection : null,
+        preview: null,
+        activeProposalId: null,
+        past: [],
+        future: [],
+        dirty: false,
+        toast: t("toast.externalChanged"),
+      });
+      return;
+    }
+
+    const merged = mergeExternalChanges(event.document, currentDocument);
+    set({
+      document: merged.merged,
+      baseHash: event.contentHash,
+      selection: selectionExists(merged.merged, state.selection) ? state.selection : null,
+      past: [...state.past, currentDocument],
+      future: [],
+      preview: null,
+      activeProposalId: null,
+      dirty: true,
+      toast: preservedToast(merged.preservedFromDisk),
     });
   },
 
@@ -162,9 +288,14 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       return;
     }
     await run(set, async () => {
-      const snapshot = await api.saveDiagram(document);
-      applySnapshot(set, snapshot, document);
-      set({ toast: "Saved diagram, Mermaid, and Markdown exports", dirty: false });
+      const snapshot = await api.saveDiagram(document, get().baseHash);
+      applySnapshot(set, snapshot);
+      set({ toast: saveToast(snapshot), dirty: false });
+      addActivity(set, {
+        kind: "save",
+        message: t("activity.saved"),
+        diagramId: snapshot.document?.id,
+      });
     });
   },
 
@@ -178,8 +309,11 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         : 0;
       set({
         toast: unsupportedCount
-          ? `Imported Mermaid with ${unsupportedCount} unsupported line${unsupportedCount === 1 ? "" : "s"}`
-          : "Imported Mermaid as Diagram IR",
+          ? t("toast.importedMermaidUnsupported", {
+              count: unsupportedCount,
+              plural: unsupportedCount === 1 ? "" : "s",
+            })
+          : t("toast.importedMermaid"),
       });
     });
   },
@@ -190,7 +324,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       return;
     }
     await run(set, async () =>
-      commit(set, get, await api.autoLayout(document), "Auto layout applied"),
+      commit(set, get, await api.autoLayout(document), t("toast.autoLayout")),
     );
   },
 
@@ -201,18 +335,30 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }
     await run(set, async () => {
       const next = await api.createSampleProposal(document);
-      commit(set, get, next, "Sample proposal created");
+      commit(set, get, next, t("proposal.createdSample"));
+      addActivity(set, {
+        kind: "proposal",
+        message: t("activity.sampleProposal"),
+        diagramId: document.id,
+        proposalId: next.proposals.at(-1)?.id,
+      });
     });
   },
 
-  async previewProposal(proposalId: string) {
+  async previewProposal(proposalId: string, opIndexes?: number[]) {
     const document = get().document;
     const proposal = document?.proposals.find((item) => item.id === proposalId);
     if (!document || !proposal) {
       return;
     }
     await run(set, async () => {
-      const preview = await api.previewProposal(document, proposal.ops);
+      const ops = opIndexes
+        ? opIndexes.flatMap((index) => {
+            const op = proposal.ops[index];
+            return op ? [op] : [];
+          })
+        : proposal.ops;
+      const preview = await api.previewProposal(document, ops);
       set({ preview, activeProposalId: proposalId });
     });
   },
@@ -221,29 +367,45 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     set({ preview: null, activeProposalId: null });
   },
 
-  async acceptProposal(proposalId: string) {
+  activateProposal(proposalId) {
+    set({ activeProposalId: proposalId });
+  },
+
+  async acceptProposal(proposalId: string, opIndexes?: number[]) {
     const document = get().document;
     if (!document) {
       return;
     }
     await run(set, async () => {
-      const next = await api.applyProposal(document, proposalId);
-      const snapshot = await api.saveDiagram(next);
-      applySnapshot(set, snapshot, next);
-      set({ preview: null, activeProposalId: null, toast: "Proposal accepted", dirty: false });
+      const next = await api.applyProposal(document, proposalId, opIndexes);
+      const snapshot = await api.saveDiagram(next, get().baseHash);
+      applySnapshot(set, snapshot);
+      set({ preview: null, activeProposalId: null, toast: t("proposal.accepted"), dirty: false });
+      addActivity(set, {
+        kind: "decision",
+        message: t("activity.proposalAccepted", { title: proposalTitle(document, proposalId) }),
+        diagramId: document.id,
+        proposalId,
+      });
     });
   },
 
-  async rejectProposal(proposalId: string) {
+  async rejectProposal(proposalId: string, reviewNote?: string) {
     const document = get().document;
     if (!document) {
       return;
     }
     await run(set, async () => {
-      const next = await api.rejectProposal(document, proposalId);
-      const snapshot = await api.saveDiagram(next);
-      applySnapshot(set, snapshot, next);
-      set({ preview: null, activeProposalId: null, toast: "Proposal rejected", dirty: false });
+      const next = await api.rejectProposal(document, proposalId, reviewNote);
+      const snapshot = await api.saveDiagram(next, get().baseHash);
+      applySnapshot(set, snapshot);
+      set({ preview: null, activeProposalId: null, toast: t("proposal.rejected"), dirty: false });
+      addActivity(set, {
+        kind: "decision",
+        message: t("activity.proposalRejected", { title: proposalTitle(document, proposalId) }),
+        diagramId: document.id,
+        proposalId,
+      });
     });
   },
 
@@ -256,7 +418,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       const drift = await api.detectDrift(document);
       set({
         drift,
-        toast: `Detected ${drift.issues.length} drift issue${drift.issues.length === 1 ? "" : "s"}`,
+        toast: t("toast.detectedDrift", {
+          count: drift.issues.length,
+          plural: drift.issues.length === 1 ? "" : "s",
+        }),
       });
     });
   },
@@ -294,7 +459,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         height: 76,
       },
     };
-    commit(set, get, applyLocalPatch(document, [op]), "Node added");
+    commit(set, get, applyLocalPatch(document, [op]), t("toast.nodeAdded"));
     set({ selection: { kind: "node", id } });
   },
 
@@ -307,7 +472,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       set,
       get,
       applyLocalPatch(document, [{ op: "update_node", id, updates }]),
-      "Node updated",
+      t("toast.nodeUpdated"),
     );
   },
 
@@ -325,7 +490,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       return;
     }
     const op = deletionOp(selection);
-    commit(set, get, applyLocalPatch(document, [op]), "Selection deleted");
+    commit(set, get, applyLocalPatch(document, [op]), t("toast.selectionDeleted"));
     set({ selection: null });
   },
 
@@ -362,7 +527,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           edge: { id, from, to, label: "calls", type: "sync", arrow: "directed", metadata },
         },
       ]),
-      "Edge added",
+      t("toast.edgeAdded"),
     );
     set({ selection: { kind: "edge", id } });
   },
@@ -376,7 +541,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       set,
       get,
       applyLocalPatch(document, [{ op: "update_edge", id, updates }]),
-      "Edge updated",
+      t("toast.edgeUpdated"),
     );
   },
 
@@ -402,7 +567,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           },
         },
       ]),
-      "Task added",
+      t("toast.taskAdded"),
     );
   },
 
@@ -415,7 +580,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       set,
       get,
       applyLocalPatch(document, [{ op: "update_task", id, updates }]),
-      "Task updated",
+      t("toast.taskUpdated"),
     );
   },
 
@@ -441,11 +606,11 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           },
         },
       ]),
-      "Note added",
+      t("toast.noteAdded"),
     );
   },
 
-  addComment(targetId, text) {
+  addComment(targetId, text, parentId) {
     const document = get().document;
     if (!document || !text.trim()) {
       return;
@@ -462,14 +627,16 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
               "comment.user",
             ),
             text: text.trim(),
-            author: "user",
+            author: "human",
+            authorKind: "human",
             resolved: false,
             createdAt: new Date().toISOString(),
             ...(targetId ? { targetId } : {}),
+            ...(parentId ? { parentId } : {}),
           },
         },
       ]),
-      "Comment added",
+      t("toast.commentAdded"),
     );
   },
 
@@ -482,7 +649,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       set,
       get,
       applyLocalPatch(document, [{ op: "resolve_comment", id }]),
-      "Comment resolved",
+      t("toast.commentResolved"),
     );
   },
 
@@ -498,7 +665,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       future: [document, ...future],
       preview: null,
       activeProposalId: null,
-      toast: "Undo",
+      toast: t("toast.undo"),
     });
   },
 
@@ -514,7 +681,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       future: future.slice(1),
       preview: null,
       activeProposalId: null,
-      toast: "Redo",
+      toast: t("toast.redo"),
     });
   },
 
@@ -523,18 +690,26 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   },
 }));
 
+if ("onExternalChange" in api) {
+  api.onExternalChange((event) => {
+    useWorkspaceStore.getState().handleExternalChange(event);
+  });
+}
+
 function applySnapshot(
   set: StoreSet,
   snapshot: WorkspaceSnapshot,
   documentOverride?: DiagramDocument,
 ): void {
-  set({
+  set((state) => ({
     workspacePath: snapshot.workspacePath,
     workspaceName: snapshot.workspaceName,
     diagrams: snapshot.diagrams,
     document: documentOverride ?? snapshot.document,
+    baseHash: snapshot.contentHash,
     gitStatus: snapshot.gitStatus,
     recentWorkspaces: snapshot.recentWorkspaces,
+    mcpSetup: state.workspacePath === snapshot.workspacePath ? state.mcpSetup : null,
     selection: null,
     preview: null,
     activeProposalId: null,
@@ -542,7 +717,155 @@ function applySnapshot(
     future: [],
     dirty: false,
     lastError: null,
-  });
+  }));
+}
+
+function addActivity(set: StoreSet, input: ActivityInput): void {
+  set((state) => ({
+    activity: [createActivityItem(input), ...state.activity].slice(0, 50),
+  }));
+}
+
+function createActivityItem(input: ActivityInput): ActivityItem {
+  return {
+    id: `activity.${Date.now()}.${Math.random().toString(36).slice(2, 8)}`,
+    at: new Date().toISOString(),
+    kind: input.kind,
+    message: input.message,
+    ...(input.diagramId ? { diagramId: input.diagramId } : {}),
+    ...(input.proposalId ? { proposalId: input.proposalId } : {}),
+  };
+}
+
+function addExternalChangeActivity(
+  set: StoreSet,
+  previousDocument: DiagramDocument | null,
+  event: Extract<ExternalDiagramChange, { kind: "created" | "changed" }>,
+): void {
+  if (event.kind === "created" || !previousDocument) {
+    addActivity(set, {
+      kind: "diagram",
+      message: t("activity.diagramCreated", { title: event.document.title }),
+      diagramId: event.diagramId,
+    });
+    return;
+  }
+
+  const previousProposalIds = new Set(previousDocument.proposals.map((proposal) => proposal.id));
+  const addedProposals = event.document.proposals.filter((proposal) => !previousProposalIds.has(proposal.id));
+  for (const proposal of addedProposals) {
+    addActivity(set, {
+      kind: "proposal",
+      message: t("activity.proposalAdded", { title: proposal.title }),
+      diagramId: event.diagramId,
+      proposalId: proposal.id,
+    });
+  }
+
+  const previousCommentIds = new Set(previousDocument.comments.map((comment) => comment.id));
+  const addedCommentCount = event.document.comments.filter((comment) => !previousCommentIds.has(comment.id)).length;
+  if (addedCommentCount > 0) {
+    addActivity(set, {
+      kind: "comment",
+      message: t("activity.commentAdded", {
+        count: addedCommentCount,
+        plural: addedCommentCount === 1 ? "" : "s",
+      }),
+      diagramId: event.diagramId,
+    });
+  }
+
+  if (addedProposals.length === 0 && addedCommentCount === 0) {
+    addActivity(set, {
+      kind: "diagram",
+      message: t("activity.diagramChanged", { title: event.document.title }),
+      diagramId: event.diagramId,
+    });
+  }
+}
+
+function upsertDiagramListItem(
+  diagrams: DiagramListItem[],
+  event: Extract<ExternalDiagramChange, { kind: "created" | "changed" }>,
+): DiagramListItem[] {
+  const item: DiagramListItem = {
+    id: event.document.id,
+    title: event.document.title,
+    path: event.path,
+    slug: event.slug,
+    updatedAt: event.document.updatedAt,
+  };
+  const next = diagrams.filter(
+    (diagram) => diagram.id !== item.id && diagram.slug !== item.slug && diagram.path !== item.path,
+  );
+  next.push(item);
+  return next.sort((a, b) => a.title.localeCompare(b.title));
+}
+
+function isCurrentDiagram(
+  document: DiagramDocument,
+  event: Extract<ExternalDiagramChange, { kind: "created" | "changed" }>,
+): boolean {
+  return document.id === event.diagramId || document.metadata.slug === event.slug;
+}
+
+function selectionExists(document: DiagramDocument, selection: Selection | null): boolean {
+  if (!selection) {
+    return false;
+  }
+  switch (selection.kind) {
+    case "node":
+      return document.nodes.some((node) => node.id === selection.id);
+    case "edge":
+      return document.edges.some((edge) => edge.id === selection.id);
+    case "note":
+      return document.notes.some((note) => note.id === selection.id);
+    case "task":
+      return document.tasks.some((task) => task.id === selection.id);
+    case "comment":
+      return document.comments.some((comment) => comment.id === selection.id);
+  }
+}
+
+function preservedToast(preserved: PreservedFromDisk): string {
+  const count =
+    preserved.proposals.length +
+    preserved.comments.length +
+    preserved.tasks.length +
+    preserved.notes.length;
+  return count > 0
+    ? t("toast.externalMergedCount", { count, plural: count === 1 ? "" : "s" })
+    : t("toast.externalMerged");
+}
+
+function proposalTitle(document: DiagramDocument, proposalId: string): string {
+  return document.proposals.find((proposal) => proposal.id === proposalId)?.title ?? proposalId;
+}
+
+function saveToast(snapshot: WorkspaceSnapshot): string {
+  const preserved = snapshot.preservedFromDisk;
+  if (!preserved) {
+    return t("toast.saved");
+  }
+
+  const counts = [
+    { label: "proposal", count: preserved.proposals.length },
+    { label: "comment", count: preserved.comments.length },
+    { label: "task", count: preserved.tasks.length },
+    { label: "note", count: preserved.notes.length },
+  ]
+    .filter((item) => item.count > 0)
+    .map((item) =>
+      t("toast.savedItem", {
+        count: item.count,
+        label: item.label,
+        plural: item.count === 1 ? "" : "s",
+      }),
+    );
+
+  return counts.length > 0
+    ? t("toast.savedPreserved", { items: counts.join(", ") })
+    : t("toast.saved");
 }
 
 async function run(set: StoreSet, action: () => Promise<void>): Promise<void> {
@@ -632,7 +955,7 @@ export const edgeTypes: DiagramEdgeType[] = [
 ];
 
 export const edgeArrows: Array<{ value: DiagramEdgeArrow; label: string }> = [
-  { value: "directed", label: "One-way arrow" },
-  { value: "bidirectional", label: "Two-way arrow" },
-  { value: "none", label: "Line only" },
+  { value: "directed", label: "directed" },
+  { value: "bidirectional", label: "bidirectional" },
+  { value: "none", label: "none" },
 ];

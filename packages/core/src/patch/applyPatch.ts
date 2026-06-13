@@ -42,9 +42,52 @@ export function applyProposal(document: DiagramDocument, proposalId: string): Di
   return markProposalStatus(applied, proposalId, "accepted");
 }
 
-export function rejectProposal(document: DiagramDocument, proposalId: string): DiagramDocument {
+export function applyProposalPartial(
+  document: DiagramDocument,
+  proposalId: string,
+  opIndexes: number[],
+): DiagramDocument {
+  const proposal = document.proposals.find((item) => item.id === proposalId);
+  if (!proposal) {
+    throw new Error(`Proposal not found: ${proposalId}`);
+  }
+  if (proposal.status !== "pending") {
+    throw new Error(`Proposal is not pending: ${proposal.status}`);
+  }
+
+  const indexes = normalizeOpIndexes(opIndexes, proposal.ops.length);
+  if (indexes.length === 0) {
+    throw new Error("At least one operation must be selected");
+  }
+
+  const applied = applyPatch(
+    document,
+    indexes.map((index) => proposal.ops[index] as DiagramPatchOp),
+  );
+  const next = DiagramDocumentSchema.parse(applied);
+  const appliedProposal = next.proposals.find((item) => item.id === proposalId);
+  if (!appliedProposal) {
+    throw new Error(`Proposal not found: ${proposalId}`);
+  }
+
+  appliedProposal.status = indexes.length === proposal.ops.length ? "accepted" : "partially_accepted";
+  appliedProposal.reviewedAt = new Date().toISOString();
+  if (appliedProposal.status === "partially_accepted") {
+    appliedProposal.appliedOpIndexes = indexes;
+  } else {
+    delete appliedProposal.appliedOpIndexes;
+  }
+  next.updatedAt = new Date().toISOString();
+  return DiagramDocumentSchema.parse(next);
+}
+
+export function rejectProposal(
+  document: DiagramDocument,
+  proposalId: string,
+  reviewNote?: string,
+): DiagramDocument {
   const next = DiagramDocumentSchema.parse(structuredClone(document));
-  return markProposalStatus(next, proposalId, "rejected");
+  return markProposalStatus(next, proposalId, "rejected", reviewNote);
 }
 
 export function addProposal(
@@ -66,6 +109,51 @@ export function addProposal(
   });
   next.updatedAt = new Date().toISOString();
   return DiagramDocumentSchema.parse(next);
+}
+
+export function describeOp(op: DiagramPatchOp, document: DiagramDocument): string {
+  switch (op.op) {
+    case "add_node":
+      return `Add node: ${op.node.label}`;
+    case "update_node":
+      return `Update node: ${nodeLabel(document, op.id)}`;
+    case "delete_node":
+      return `Delete node: ${nodeLabel(document, op.id)}`;
+    case "move_node":
+      return `Move node: ${nodeLabel(document, op.id)}`;
+    case "add_edge":
+      return `Add edge: ${endpointLabel(document, op.edge.from)} -> ${endpointLabel(document, op.edge.to)}`;
+    case "update_edge":
+      return `Update edge: ${op.id}`;
+    case "delete_edge":
+      return `Delete edge: ${op.id}`;
+    case "add_group":
+      return `Add group: ${op.group.label}`;
+    case "update_group":
+      return `Update group: ${op.id}`;
+    case "delete_group":
+      return `Delete group: ${op.id}`;
+    case "add_note":
+      return `Add note: ${op.note.text}`;
+    case "update_note":
+      return `Update note: ${op.id}`;
+    case "delete_note":
+      return `Delete note: ${op.id}`;
+    case "add_task":
+      return `Add task: ${op.task.title}`;
+    case "update_task":
+      return `Update task: ${op.id}`;
+    case "delete_task":
+      return `Delete task: ${op.id}`;
+    case "add_comment":
+      return `Add comment: ${op.comment.text}`;
+    case "resolve_comment":
+      return `Resolve comment: ${op.id}`;
+    case "set_layout":
+      return "Update layout";
+    case "set_direction":
+      return `Set direction: ${op.direction}`;
+  }
 }
 
 function applySingleOp(document: DiagramDocument, op: DiagramPatchOp): void {
@@ -195,12 +283,17 @@ function markProposalStatus(
   document: DiagramDocument,
   proposalId: string,
   status: DiagramProposal["status"],
+  reviewNote?: string,
 ): DiagramDocument {
   const proposal = document.proposals.find((item) => item.id === proposalId);
   if (!proposal) {
     throw new Error(`Proposal not found: ${proposalId}`);
   }
   proposal.status = status;
+  proposal.reviewedAt = new Date().toISOString();
+  if (reviewNote !== undefined) {
+    proposal.reviewNote = reviewNote;
+  }
   document.updatedAt = new Date().toISOString();
   return DiagramDocumentSchema.parse(document);
 }
@@ -241,4 +334,22 @@ function removeById<T extends { id: string }>(items: T[], id: string, type: stri
     throw new Error(`${type} not found: ${id}`);
   }
   items.splice(index, 1);
+}
+
+function normalizeOpIndexes(opIndexes: number[], opCount: number): number[] {
+  const indexes = [...new Set(opIndexes)].sort((a, b) => a - b);
+  for (const index of indexes) {
+    if (!Number.isInteger(index) || index < 0 || index >= opCount) {
+      throw new Error(`Operation index out of range: ${index}`);
+    }
+  }
+  return indexes;
+}
+
+function nodeLabel(document: DiagramDocument, nodeId: string): string {
+  return document.nodes.find((node) => node.id === nodeId)?.label ?? nodeId;
+}
+
+function endpointLabel(document: DiagramDocument, nodeId: string): string {
+  return nodeLabel(document, nodeId);
 }

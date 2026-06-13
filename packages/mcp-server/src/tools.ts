@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import {
   addProposal,
+  applyPatch,
   applyProposal,
   createSampleWorkspace,
   detectDrift,
@@ -45,7 +46,13 @@ export interface AgentCanvasTools {
   }): Promise<unknown>;
   diagram_preview_patch(input: { diagramId: string; ops: unknown }): Promise<unknown>;
   diagram_apply_proposal(input: { diagramId: string; proposalId: string }): Promise<unknown>;
-  diagram_reject_proposal(input: { diagramId: string; proposalId: string }): Promise<unknown>;
+  diagram_reject_proposal(input: { diagramId: string; proposalId: string; reason?: string }): Promise<unknown>;
+  diagram_add_comment(input: {
+    diagramId: string;
+    text: string;
+    targetId?: string;
+    parentId?: string;
+  }): Promise<unknown>;
   diagram_detect_drift(input: { diagramId: string }): Promise<unknown>;
   repo_scan(input: { include?: string[] }): Promise<unknown>;
   workspace_git_status(input: Record<string, never>): Promise<unknown>;
@@ -165,7 +172,7 @@ export function createAgentCanvasTools(workspacePath: string): AgentCanvasTools 
         return {
           ok: false,
           applied: false,
-          errors: ["proposalは作成済み。アプリで承認してください"],
+          errors: ["The proposal was created. Please approve it in the AgentCanvas app."],
         };
       }
       const document = await loadDiagram(root, input.diagramId);
@@ -180,11 +187,37 @@ export function createAgentCanvasTools(workspacePath: string): AgentCanvasTools 
 
     async diagram_reject_proposal(input) {
       const document = await loadDiagram(root, input.diagramId);
-      const next = rejectProposal(document, input.proposalId);
+      const next = rejectProposal(document, input.proposalId, input.reason);
       await saveDiagramBundle(root, next);
       return {
         ok: true,
         rejected: true,
+        diagram: next,
+      };
+    },
+
+    async diagram_add_comment(input) {
+      const document = await loadDiagram(root, input.diagramId);
+      const now = new Date().toISOString();
+      const next = applyPatch(document, [
+        {
+          op: "add_comment",
+          comment: {
+            id: `comment.agent.${Date.now()}`,
+            text: input.text,
+            author: "agent",
+            authorKind: "agent",
+            resolved: false,
+            createdAt: now,
+            ...(input.targetId ? { targetId: input.targetId } : {}),
+            ...(input.parentId ? { parentId: input.parentId } : {}),
+          },
+        },
+      ]);
+      await saveDiagramBundle(root, next);
+      return {
+        ok: true,
+        comment: next.comments.at(-1),
         diagram: next,
       };
     },

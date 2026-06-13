@@ -243,10 +243,31 @@ code {
   font-size: 12px;
 }
 
+.language-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.language-toggle button.active {
+  border-color: #2563eb;
+  background: #eef6ff;
+  color: #0f4f9f;
+}
+
 .mcp-command {
   display: block;
   overflow-wrap: anywhere;
   line-height: 1.5;
+}
+
+.mcp-actions {
+  display: grid;
+  gap: 7px;
+}
+
+.mcp-actions button {
+  justify-content: flex-start;
 }
 
 .toolbar {
@@ -620,6 +641,28 @@ code {
   margin-top: 8px;
 }
 
+.op-list.selectable {
+  display: grid;
+}
+
+.op-choice {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 6px;
+  align-items: start;
+}
+
+.op-choice input {
+  width: 15px;
+  height: 15px;
+  margin: 3px 0 0;
+}
+
+.op-choice code {
+  white-space: normal;
+  word-break: break-word;
+}
+
 .import-box {
   display: grid;
   gap: 8px;
@@ -629,6 +672,67 @@ code {
 .proposal {
   border-top: 1px solid #edf1f6;
   padding: 10px 0;
+}
+
+.activity-list {
+  display: grid;
+  gap: 6px;
+}
+
+.activity-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  width: 100%;
+  gap: 3px 8px;
+  min-height: 0;
+  border: 0;
+  border-left: 3px solid #94a3b8;
+  border-radius: 0;
+  background: #f8fafc;
+  padding: 7px 8px;
+  text-align: left;
+}
+
+.activity-row:hover {
+  background: #f1f5f9;
+}
+
+.activity-row span {
+  color: #64748b;
+  font-size: 11px;
+}
+
+.activity-row strong {
+  color: #334155;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.activity-row p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.activity-proposal {
+  border-left-color: #2563eb;
+}
+
+.activity-comment {
+  border-left-color: #7c3aed;
+}
+
+.activity-decision,
+.activity-save {
+  border-left-color: #059669;
+}
+
+.activity-warning {
+  border-left-color: #d97706;
 }
 
 .proposal.active {
@@ -664,6 +768,12 @@ code {
   font-size: 12px;
 }
 
+.reject-form {
+  display: grid;
+  gap: 7px;
+  margin-top: 8px;
+}
+
 .button-row {
   display: flex;
   flex-wrap: wrap;
@@ -681,6 +791,43 @@ code {
   padding-top: 10px;
   color: #334155;
   font-size: 12px;
+}
+
+.decision-row p {
+  flex-basis: 100%;
+  margin: 0;
+  color: #475569;
+  line-height: 1.4;
+}
+
+.comment-thread {
+  display: grid;
+  gap: 5px;
+}
+
+.mini-row.reply {
+  margin-left: 12px;
+}
+
+.mini-row strong {
+  color: #334155;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.mini-row .comment-author {
+  border-radius: 5px;
+  padding: 2px 6px;
+}
+
+.mini-row .comment-author-human {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.mini-row .comment-author-agent {
+  background: #dbeafe;
+  color: #1d4ed8;
 }
 
 .drift-list {

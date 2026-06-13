@@ -8,12 +8,17 @@ The canonical source of truth is **Diagram IR** (`*.diagram.json`). Mermaid is i
 
 - Cross-platform Electron desktop MVP for Windows, macOS, and Ubuntu-style Linux.
 - React + Vite renderer with `@xyflow/react` canvas editing.
-- Diagram IR v0.1 with Zod validation and TypeScript types.
+- Diagram IR v0.2 with Zod validation, TypeScript types, and automatic v0.1 migration.
 - Mermaid flowchart import/export for the main practical subset.
 - Git-friendly JSON output with stable key sorting and two-space indentation.
-- Atomic writes for `.diagram.json`, `.mmd`, and `.md`.
-- Proposal Patch workflow with preview, accept, reject, and fixed Redis sample proposal.
-- Local MCP stdio server for agent reads and proposal creation.
+- Atomic writes for `.diagram.json`, `.mmd`, and `.md`, plus checked saves that preserve disk-only collaboration records.
+- External file watching with dirty-state merge prompts for human and agent concurrent work.
+- Proposal Patch workflow with preview, full or partial accept, reject with reason, and review history.
+- Threaded human/agent comments, review notes, tasks, notes, and an in-app activity feed.
+- Local MCP stdio server for agent reads, proposal creation, comments, and guarded review actions.
+- Packaged MCP server bundle with copyable Claude Code command and JSON config.
+- English/Japanese UI strings with a language toggle.
+- PNG and standalone HTML export through native save dialogs.
 - Repo scan and drift detection for missing files, missing symbols, and unlinked source files.
 - No cloud sync, telemetry, authentication, or external AI API calls.
 
@@ -92,12 +97,13 @@ design/
 
 ## Diagram IR
 
-Diagram IR v0.1 stores:
+Diagram IR v0.2 stores:
 
 - nodes, edges, groups, notes, tasks, and comments
+- threaded comment parent links and human/agent author kind
 - code references
 - canvas layout and viewport
-- pending and historical proposals
+- pending and historical proposals, review notes, review timestamps, and partial-apply indexes
 - import warnings and metadata
 
 The Zod schema lives in `packages/core/src/schema/diagram.ts`.
@@ -151,11 +157,14 @@ Tools:
 - `diagram_preview_patch`
 - `diagram_apply_proposal`
 - `diagram_reject_proposal`
+- `diagram_add_comment`
 - `diagram_detect_drift`
 - `repo_scan`
 - `workspace_git_status`
 
 `diagram_apply_proposal` refuses by default unless `AGENTCANVAS_ALLOW_MCP_APPLY=1` is set. The normal model is: agents propose, humans approve in the app.
+
+`diagram_reject_proposal` accepts an optional `reason`, which is stored as the proposal review note. `diagram_add_comment` can create top-level comments or replies by passing `parentId`.
 
 `workspace_get_info` and `workspace_list_diagrams` are read-only and do not create sample files in an empty workspace. Use `workspace_create_sample` when sample generation is desired.
 
@@ -167,8 +176,11 @@ Example agent flow:
 1. workspace_list_diagrams
 2. diagram_fetch { "diagramId": "diagram.system_overview" }
 3. diagram_propose_patch with DiagramPatchOp[]
-4. User reviews proposal in AgentCanvas
+4. Optional diagram_add_comment for review context
+5. User reviews proposal in AgentCanvas
 ```
+
+In the desktop app, the sidebar can copy a Claude Code command or JSON MCP config for the current workspace. Packaged builds load the bundled MCP server from the app resources directory.
 
 ## Security Model
 
@@ -180,6 +192,7 @@ Example agent flow:
 - Production renderer HTML includes a restrictive CSP compatible with the Vite dev server.
 - Writes are constrained to the selected workspace with resolved path checks.
 - Saves use atomic temporary-file writes.
+- PNG and HTML export are the only write-path exception: the renderer sends content through IPC, main shows a native save dialog, and the app writes only to the user-selected path.
 - Git integration only runs non-destructive `git status --short`.
 - MCP apply is disabled by default.
 - No telemetry, cloud sync, external LLM calls, or runtime network requirement.
@@ -198,15 +211,16 @@ The sample lives at `examples/sample-workspace` and contains the System Overview
 
 - Mermaid support is intentionally a practical flowchart subset.
 - Layout uses a deterministic layered/grid fallback instead of full ELK routing.
-- Proposal partial-apply UI is not implemented; accept/reject applies the whole proposal.
+- Concurrent graph edits are merged conservatively: collaboration records such as proposals, comments, notes, and tasks are preserved, while true structural conflicts still require human review.
 - Repo scan is regex-based and not a full TypeScript AST index.
 - Repo scan has safety limits for maximum file count and file size; skipped or malformed files are reported as warnings.
+- HTML export embeds a PNG snapshot and readable text; it is not an editable project bundle.
 - Fully signed installers still depend on OS signing/notarization setup; use `package:dir` for unsigned packaging verification.
 
 ## Roadmap
 
 - Optional ELK-based layout engine with better edge routing.
-- Partial proposal apply UI.
+- Richer structural conflict resolution for simultaneous node and edge edits.
 - Richer group editing and collapse behavior.
 - Deeper TypeScript symbol index and drift calibration.
 - Workspace-local settings.

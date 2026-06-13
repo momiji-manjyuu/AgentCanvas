@@ -75,8 +75,33 @@ export function createServer(workspacePath: string): McpServer {
   );
   server.tool(
     "diagram_reject_proposal",
-    { diagramId: z.string(), proposalId: z.string() },
-    async (input) => toText(await tools.diagram_reject_proposal(input)),
+    { diagramId: z.string(), proposalId: z.string(), reason: z.string().optional() },
+    async (input) =>
+      toText(
+        await tools.diagram_reject_proposal({
+          diagramId: input.diagramId,
+          proposalId: input.proposalId,
+          ...(input.reason ? { reason: input.reason } : {}),
+        }),
+      ),
+  );
+  server.tool(
+    "diagram_add_comment",
+    {
+      diagramId: z.string(),
+      text: z.string(),
+      targetId: z.string().optional(),
+      parentId: z.string().optional(),
+    },
+    async (input) =>
+      toText(
+        await tools.diagram_add_comment({
+          diagramId: input.diagramId,
+          text: input.text,
+          ...(input.targetId ? { targetId: input.targetId } : {}),
+          ...(input.parentId ? { parentId: input.parentId } : {}),
+        }),
+      ),
   );
   server.tool(
     "diagram_detect_drift",

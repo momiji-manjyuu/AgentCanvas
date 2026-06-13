@@ -1,9 +1,11 @@
 import { MessageSquarePlus, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
-import type { CodeRef, DiagramEdgeArrow } from "@agent-canvas/core";
+import type { CodeRef, DiagramDocument, DiagramEdgeArrow } from "@agent-canvas/core";
+import { useI18n } from "../i18n";
 import { edgeArrows, edgeTypes, nodeTypes, useWorkspaceStore } from "../state/workspace-store";
 
 export function Inspector() {
+  const { t } = useI18n();
   const document = useWorkspaceStore((state) => state.document);
   const selection = useWorkspaceStore((state) => state.selection);
   const addNode = useWorkspaceStore((state) => state.addNode);
@@ -36,22 +38,23 @@ export function Inspector() {
   const targetedTasks = document.tasks.filter((task) => task.targetId === targetId);
   const targetedNotes = document.notes.filter((note) => note.targetId === targetId);
   const targetedComments = document.comments.filter((comment) => comment.targetId === targetId);
+  const commentThreads = buildCommentThreads(targetedComments);
 
   return (
     <section className="right-section inspector">
       <div className="right-section-title">
-        <strong>Inspector</strong>
-        <button title="Add service node" onClick={() => addNode("service")} type="button">
+        <strong>{t("inspector.title")}</strong>
+        <button title={t("inspector.addServiceNode")} onClick={() => addNode("service")} type="button">
           <Plus size={15} />
         </button>
       </div>
 
-      {!selection ? <p className="muted">No selection</p> : null}
+      {!selection ? <p className="muted">{t("inspector.noSelection")}</p> : null}
 
       {selectedNode ? (
         <div className="field-stack">
           <label>
-            Label
+            {t("inspector.label")}
             <input
               value={selectedNode.label}
               onChange={(event) =>
@@ -60,7 +63,7 @@ export function Inspector() {
             />
           </label>
           <label>
-            Type
+            {t("inspector.type")}
             <select
               value={selectedNode.type}
               onChange={(event) =>
@@ -75,7 +78,7 @@ export function Inspector() {
             </select>
           </label>
           <label>
-            Description
+            {t("inspector.description")}
             <textarea
               value={selectedNode.description ?? ""}
               onChange={(event) => updateNode(selectedNode.id, { description: event.target.value })}
@@ -85,22 +88,22 @@ export function Inspector() {
             <input
               value={refPath}
               onChange={(event) => setRefPath(event.target.value)}
-              placeholder="code path"
+              placeholder={t("inspector.codePath")}
             />
             <input
               value={refSymbol}
               onChange={(event) => setRefSymbol(event.target.value)}
-              placeholder="symbol"
+              placeholder={t("inspector.symbol")}
             />
             <button
-              title="Add code reference"
+              title={t("inspector.addCodeRef")}
               onClick={() => {
                 const nextPath = refPath.trim();
                 if (!nextPath) {
                   return;
                 }
                 if (isUnsafeCodeRefPath(nextPath)) {
-                  setCodeRefError("Code references must stay inside the workspace");
+                  setCodeRefError(t("inspector.codeRefUnsafe"));
                   return;
                 }
                 updateNode(selectedNode.id, {
@@ -135,10 +138,10 @@ export function Inspector() {
                     ),
                   });
                 }}
-                placeholder="symbol"
+                placeholder={t("inspector.symbol")}
               />
               <button
-                title="Remove code reference"
+                title={t("inspector.removeCodeRef")}
                 onClick={() =>
                   updateNode(selectedNode.id, {
                     codeRefs: selectedNode.codeRefs.filter((_, itemIndex) => itemIndex !== index),
@@ -156,14 +159,14 @@ export function Inspector() {
       {selectedEdge ? (
         <div className="field-stack">
           <label>
-            Label
+            {t("inspector.label")}
             <input
               value={selectedEdge.label ?? ""}
               onChange={(event) => updateEdge(selectedEdge.id, { label: event.target.value })}
             />
           </label>
           <label>
-            Type
+            {t("inspector.type")}
             <select
               value={selectedEdge.type}
               onChange={(event) =>
@@ -178,7 +181,7 @@ export function Inspector() {
             </select>
           </label>
           <label>
-            Arrow
+            {t("inspector.arrow")}
             <select
               value={selectedEdge.arrow ?? "directed"}
               onChange={(event) =>
@@ -187,7 +190,7 @@ export function Inspector() {
             >
               {edgeArrows.map((arrow) => (
                 <option key={arrow.value} value={arrow.value}>
-                  {arrow.label}
+                  {edgeArrowLabel(arrow.value, t)}
                 </option>
               ))}
             </select>
@@ -199,16 +202,16 @@ export function Inspector() {
         <div className="field-stack">
           <button className="danger-button" onClick={deleteSelected} type="button">
             <Trash2 size={15} />
-            Delete
+            {t("inspector.delete")}
           </button>
           <div className="inline-create">
             <input
               value={quickText}
               onChange={(event) => setQuickText(event.target.value)}
-              placeholder="Task, note, comment"
+              placeholder={t("inspector.taskNoteComment")}
             />
             <button
-              title="Add comment"
+              title={t("inspector.addComment")}
               onClick={() => {
                 addComment(targetId, quickText);
                 setQuickText("");
@@ -218,7 +221,7 @@ export function Inspector() {
               <MessageSquarePlus size={15} />
             </button>
             <button
-              title="Add task"
+              title={t("inspector.addTask")}
               onClick={() => {
                 addTask(targetId, quickText);
                 setQuickText("");
@@ -228,7 +231,7 @@ export function Inspector() {
               <Plus size={15} />
             </button>
             <button
-              title="Add note"
+              title={t("inspector.addNote")}
               onClick={() => {
                 addNote(targetId, quickText);
                 setQuickText("");
@@ -257,22 +260,101 @@ export function Inspector() {
                 {note.text}
               </div>
             ))}
-            {targetedComments.map((comment) => (
-              <button
-                className="mini-row"
-                key={comment.id}
-                onClick={() => resolveComment(comment.id)}
-                type="button"
-              >
-                <span>{comment.resolved ? "resolved" : "open"}</span>
-                {comment.text}
-              </button>
+            {commentThreads.map((thread) => (
+              <CommentThread
+                addComment={addComment}
+                key={thread.root.id}
+                replies={thread.replies}
+                resolveComment={resolveComment}
+                root={thread.root}
+                targetId={targetId}
+              />
             ))}
           </div>
         </div>
       ) : null}
     </section>
   );
+}
+
+interface CommentThreadData {
+  root: DiagramComment;
+  replies: DiagramComment[];
+}
+
+type DiagramComment = DiagramDocument["comments"][number];
+
+function CommentThread(props: {
+  root: DiagramComment;
+  replies: DiagramComment[];
+  targetId: string | undefined;
+  addComment(targetId: string | undefined, text: string, parentId?: string): void;
+  resolveComment(id: string): void;
+}) {
+  const { t } = useI18n();
+  const [replyText, setReplyText] = useState("");
+  const authorKind = props.root.authorKind ?? (props.root.author === "agent" ? "agent" : "human");
+
+  return (
+    <div className="comment-thread">
+      <button className="mini-row" onClick={() => props.resolveComment(props.root.id)} type="button">
+        <span>{props.root.resolved ? t("common.resolved") : t("common.open")}</span>
+        <strong className={`comment-author comment-author-${authorKind}`}>
+          {t(authorKind === "agent" ? "comment.agent" : "comment.human")}
+        </strong>
+        {props.root.text}
+      </button>
+      {props.replies.map((reply) => (
+        <button className="mini-row reply" key={reply.id} onClick={() => props.resolveComment(reply.id)} type="button">
+          <span>{reply.resolved ? t("common.resolved") : t("common.open")}</span>
+          <strong className={`comment-author comment-author-${commentAuthorKind(reply)}`}>
+            {t(commentAuthorKind(reply) === "agent" ? "comment.agent" : "comment.human")}
+          </strong>
+          {reply.text}
+        </button>
+      ))}
+      <div className="inline-create">
+        <input value={replyText} onChange={(event) => setReplyText(event.target.value)} placeholder={t("inspector.reply")} />
+        <button
+          title={t("inspector.reply")}
+          onClick={() => {
+            props.addComment(props.root.targetId ?? props.targetId, replyText, props.root.id);
+            setReplyText("");
+          }}
+          type="button"
+        >
+          <MessageSquarePlus size={15} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function commentAuthorKind(comment: DiagramComment): "agent" | "human" {
+  return comment.authorKind ?? (comment.author === "agent" ? "agent" : "human");
+}
+
+function buildCommentThreads(comments: DiagramComment[]): CommentThreadData[] {
+  const ids = new Set(comments.map((comment) => comment.id));
+  const roots = comments.filter((comment) => !comment.parentId || !ids.has(comment.parentId));
+  const repliesByParent = new Map<string, DiagramComment[]>();
+  for (const comment of comments) {
+    if (comment.parentId && ids.has(comment.parentId)) {
+      repliesByParent.set(comment.parentId, [...(repliesByParent.get(comment.parentId) ?? []), comment]);
+    }
+  }
+  return roots.map((root) => ({ root, replies: repliesByParent.get(root.id) ?? [] }));
+}
+
+function edgeArrowLabel(value: DiagramEdgeArrow, translate: ReturnType<typeof useI18n>["t"]): string {
+  switch (value) {
+    case "directed":
+      return translate("edgeArrow.directed");
+    case "bidirectional":
+      return translate("edgeArrow.bidirectional");
+    case "none":
+      return translate("edgeArrow.none");
+  }
 }
 
 function isUnsafeCodeRefPath(value: string): boolean {
