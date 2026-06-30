@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { createSampleDiagram, detectDrift, type DiagramDocument } from "../src/index.js";
+import { createSampleDiagram, detectDrift, scanRepo, type DiagramDocument } from "../src/index.js";
 
 describe("drift detection", () => {
   it("detects missing codeRef files", async () => {
@@ -42,7 +42,11 @@ describe("drift detection", () => {
   it("detects missing symbols", async () => {
     const workspace = await mkdtemp(path.join(os.tmpdir(), "agent-canvas-drift-"));
     await mkdir(path.join(workspace, "src"), { recursive: true });
-    await writeFile(path.join(workspace, "src", "AuthService.ts"), "export class AuthService {}\n", "utf8");
+    await writeFile(
+      path.join(workspace, "src", "AuthService.ts"),
+      "export class AuthService {}\n",
+      "utf8",
+    );
     const document = withCodeRef(createSampleDiagram(), "node.auth_service", {
       path: "src/AuthService.ts",
       symbol: "MissingSymbol",
@@ -56,11 +60,17 @@ describe("drift detection", () => {
     const workspace = await mkdtemp(path.join(os.tmpdir(), "agent-canvas-drift-"));
     for (const directory of ["lib", "app", "server"]) {
       await mkdir(path.join(workspace, directory), { recursive: true });
-      await writeFile(path.join(workspace, directory, "Thing.ts"), "export function thing() {}\n", "utf8");
+      await writeFile(
+        path.join(workspace, directory, "Thing.ts"),
+        "export function thing() {}\n",
+        "utf8",
+      );
     }
 
     const result = await detectDrift(workspace, createSampleDiagram());
-    expect(result.issues.filter((issue) => issue.type === "unlinked_code_candidate")).toHaveLength(3);
+    expect(result.issues.filter((issue) => issue.type === "unlinked_code_candidate")).toHaveLength(
+      3,
+    );
   });
 
   it("warns on broken package.json instead of crashing", async () => {
@@ -68,7 +78,34 @@ describe("drift detection", () => {
     await writeFile(path.join(workspace, "package.json"), "{ broken", "utf8");
 
     const result = await detectDrift(workspace, createSampleDiagram());
-    expect(result.scan.warnings.some((warning) => warning.type === "package_json_parse_error")).toBe(true);
+    expect(
+      result.scan.warnings.some((warning) => warning.type === "package_json_parse_error"),
+    ).toBe(true);
+  });
+
+  it("indexes TypeScript interfaces, types, enums, and async functions", async () => {
+    const workspace = await mkdtemp(path.join(os.tmpdir(), "agent-canvas-drift-"));
+    await mkdir(path.join(workspace, "src"), { recursive: true });
+    await writeFile(
+      path.join(workspace, "src", "contracts.ts"),
+      [
+        "export interface PaymentGateway {}",
+        "export type RetryPolicy = { attempts: number }",
+        "export enum QueuePriority { High = 'high' }",
+        "export async function loadInvoice() { return null }",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const result = await scanRepo(workspace, { include: ["src"] });
+    expect(result.symbols).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "PaymentGateway", kind: "interface" }),
+        expect.objectContaining({ name: "RetryPolicy", kind: "type" }),
+        expect.objectContaining({ name: "QueuePriority", kind: "enum" }),
+        expect.objectContaining({ name: "loadInvoice", kind: "function" }),
+      ]),
+    );
   });
 });
 

@@ -4,7 +4,7 @@ import { ensureWithinWorkspace, pathExists, resolveWorkspacePath } from "../stor
 
 export interface RepoSymbol {
   name: string;
-  kind: "class" | "function" | "const";
+  kind: "class" | "function" | "const" | "interface" | "type" | "enum";
   path: string;
   line: number;
   exported: boolean;
@@ -117,7 +117,10 @@ async function walk(root: string, directory: string): Promise<string[]> {
     const relative = path.relative(root, absolute).replace(/\\/g, "/");
     if (entry.isDirectory()) {
       result.push(...(await walk(root, absolute)));
-    } else if (path.basename(relative) === "package.json" || CODE_EXTENSIONS.has(path.extname(relative))) {
+    } else if (
+      path.basename(relative) === "package.json" ||
+      CODE_EXTENSIONS.has(path.extname(relative))
+    ) {
       result.push(relative);
     }
   }
@@ -161,14 +164,17 @@ async function scanSymbols(root: string, filePath: string): Promise<RepoSymbol[]
   lines.forEach((line, index) => {
     const candidates: Array<{ regex: RegExp; kind: RepoSymbol["kind"] }> = [
       { regex: /\b(export\s+)?class\s+([A-Za-z_$][\w$]*)/, kind: "class" },
-      { regex: /\b(export\s+)?function\s+([A-Za-z_$][\w$]*)/, kind: "function" },
+      { regex: /\b(export\s+)?(async\s+)?function\s+([A-Za-z_$][\w$]*)/, kind: "function" },
+      { regex: /\b(export\s+)?interface\s+([A-Za-z_$][\w$]*)/, kind: "interface" },
+      { regex: /\b(export\s+)?type\s+([A-Za-z_$][\w$]*)/, kind: "type" },
+      { regex: /\b(export\s+)?enum\s+([A-Za-z_$][\w$]*)/, kind: "enum" },
       { regex: /\bexport\s+const\s+([A-Za-z_$][\w$]*)/, kind: "const" },
       { regex: /\bconst\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\(/, kind: "function" },
     ];
 
     for (const candidate of candidates) {
       const match = line.match(candidate.regex);
-      const name = match?.[2] ?? match?.[1];
+      const name = match?.at(-1);
       if (name && name !== "export ") {
         symbols.push({
           name,
