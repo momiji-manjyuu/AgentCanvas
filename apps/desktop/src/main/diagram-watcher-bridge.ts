@@ -49,5 +49,10 @@ function isSelfEcho(event: DiagramWatchEvent): boolean {
   if (!("contentHash" in event)) {
     return false;
   }
-  return selfWriteHashes.get(path.resolve(event.path)) === event.contentHash;
+  const resolvedPath = path.resolve(event.path);
+  if (selfWriteHashes.get(resolvedPath) !== event.contentHash) {
+    return false;
+  }
+  selfWriteHashes.delete(resolvedPath);
+  return true;
 }

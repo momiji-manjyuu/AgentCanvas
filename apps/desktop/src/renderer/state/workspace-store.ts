@@ -228,8 +228,13 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
     if (event.kind === "removed") {
       set((current) => ({
-        diagrams: current.diagrams.filter((diagram) => diagram.slug !== event.slug && diagram.path !== event.path),
-        toast: current.document?.metadata.slug === event.slug ? t("activity.diagramRemoved", { slug: event.slug }) : current.toast,
+        diagrams: current.diagrams.filter(
+          (diagram) => diagram.slug !== event.slug && diagram.path !== event.path,
+        ),
+        toast:
+          current.document?.metadata.slug === event.slug
+            ? t("activity.diagramRemoved", { slug: event.slug })
+            : current.toast,
       }));
       addActivity(set, {
         kind: "diagram",
@@ -702,22 +707,42 @@ function applySnapshot(
   documentOverride?: DiagramDocument,
 ): void {
   set((state) => ({
+    ...snapshotState(state, snapshot, documentOverride),
+  }));
+}
+
+function snapshotState(
+  state: WorkspaceState,
+  snapshot: WorkspaceSnapshot,
+  documentOverride?: DiagramDocument,
+): Partial<WorkspaceState> {
+  const nextDocument = documentOverride ?? snapshot.document;
+  const sameWorkspace = state.workspacePath === snapshot.workspacePath;
+  const sameDiagram = Boolean(
+    sameWorkspace && state.document && nextDocument && state.document.id === nextDocument.id,
+  );
+  const nextSelection =
+    sameDiagram && nextDocument && selectionExists(nextDocument, state.selection)
+      ? state.selection
+      : null;
+
+  return {
     workspacePath: snapshot.workspacePath,
     workspaceName: snapshot.workspaceName,
     diagrams: snapshot.diagrams,
-    document: documentOverride ?? snapshot.document,
+    document: nextDocument,
     baseHash: snapshot.contentHash,
     gitStatus: snapshot.gitStatus,
     recentWorkspaces: snapshot.recentWorkspaces,
-    mcpSetup: state.workspacePath === snapshot.workspacePath ? state.mcpSetup : null,
-    selection: null,
+    mcpSetup: sameWorkspace ? state.mcpSetup : null,
+    selection: nextSelection,
     preview: null,
     activeProposalId: null,
     past: [],
     future: [],
     dirty: false,
     lastError: null,
-  }));
+  };
 }
 
 function addActivity(set: StoreSet, input: ActivityInput): void {
@@ -752,7 +777,9 @@ function addExternalChangeActivity(
   }
 
   const previousProposalIds = new Set(previousDocument.proposals.map((proposal) => proposal.id));
-  const addedProposals = event.document.proposals.filter((proposal) => !previousProposalIds.has(proposal.id));
+  const addedProposals = event.document.proposals.filter(
+    (proposal) => !previousProposalIds.has(proposal.id),
+  );
   for (const proposal of addedProposals) {
     addActivity(set, {
       kind: "proposal",
@@ -763,7 +790,9 @@ function addExternalChangeActivity(
   }
 
   const previousCommentIds = new Set(previousDocument.comments.map((comment) => comment.id));
-  const addedCommentCount = event.document.comments.filter((comment) => !previousCommentIds.has(comment.id)).length;
+  const addedCommentCount = event.document.comments.filter(
+    (comment) => !previousCommentIds.has(comment.id),
+  ).length;
   if (addedCommentCount > 0) {
     addActivity(set, {
       kind: "comment",

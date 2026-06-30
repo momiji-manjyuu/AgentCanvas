@@ -59,7 +59,9 @@ describe("dual actor collaboration", () => {
     expect(checked.preservedFromDisk?.proposals).toEqual(["proposal.agent.cache-note"]);
     expect(saved.nodes.some((node) => node.id === humanNode.id)).toBe(true);
     expect(saved.layout.nodes[humanNode.id]).toEqual({ x: 840, y: 320, width: 190, height: 76 });
-    expect(saved.proposals.find((proposal) => proposal.id === "proposal.agent.cache-note")).toMatchObject({
+    expect(
+      saved.proposals.find((proposal) => proposal.id === "proposal.agent.cache-note"),
+    ).toMatchObject({
       status: "pending",
       title: "Document cache fallback",
     });
@@ -79,7 +81,11 @@ describe("dual actor collaboration", () => {
     await watcher.ready;
 
     const proposalId = "proposal.agent.retry-task";
-    await saveDiagramBundle(workspace, addProposal(base, agentProposal(proposalId)), "system-overview");
+    await saveDiagramBundle(
+      workspace,
+      addProposal(base, agentProposal(proposalId)),
+      "system-overview",
+    );
 
     const event = await waitForEvent(
       events,
@@ -95,6 +101,59 @@ describe("dual actor collaboration", () => {
       expect(event.document.proposals.find((proposal) => proposal.id === proposalId)?.status).toBe(
         "pending",
       );
+    }
+  });
+
+  it("emits watcher events for external agent comments", async () => {
+    const workspace = await mkdtemp(path.join(os.tmpdir(), "agent-canvas-dual-actor-watch-"));
+    await ensureWorkspace(workspace);
+    const base = createSampleDiagram();
+    await saveDiagramBundle(workspace, base, "system-overview");
+
+    const events: DiagramWatchEvent[] = [];
+    const watcher = createDiagramWatcher(workspace, (event) => {
+      events.push(event);
+    });
+    watchers.push(watcher);
+    await watcher.ready;
+
+    const commentId = "comment.agent.cache-check";
+    await saveDiagramBundle(
+      workspace,
+      {
+        ...base,
+        comments: [
+          ...base.comments,
+          {
+            id: commentId,
+            text: "Confirm the Redis fallback behavior before accepting this design.",
+            author: "agent",
+            authorKind: "agent",
+            targetId: "node.redis_cache",
+            resolved: false,
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      },
+      "system-overview",
+    );
+
+    const event = await waitForEvent(
+      events,
+      (item) =>
+        "document" in item &&
+        item.diagramId === base.id &&
+        item.document.comments.some((comment) => comment.id === commentId),
+    );
+
+    expect(event.kind === "created" || event.kind === "changed").toBe(true);
+    if ("document" in event) {
+      const comment = event.document.comments.find((item) => item.id === commentId);
+      expect(comment).toMatchObject({
+        authorKind: "agent",
+        targetId: "node.redis_cache",
+        resolved: false,
+      });
     }
   });
 });
